@@ -1,127 +1,324 @@
 ---
-// src/pages/create.astro
+// src/pages/create.astro — Admin: Create a new LXD container
 import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="Create Container">
-  <header style="margin-bottom: 2rem;">
-    <a href="/" style="text-decoration: none; color: #3b82f6;">&larr; Back to Dashboard</a>
-    <h1>Deploy New Container</h1>
-  </header>
+  <div style="max-width:680px;">
+    <div style="margin-bottom:2rem;">
+      <a href="/" style="color:var(--accent);text-decoration:none;font-size:0.875rem;">← Back to Dashboard</a>
+      <h1 style="font-size:1.75rem;font-weight:700;letter-spacing:-0.02em;margin-top:0.75rem;">Deploy New Container</h1>
+      <p class="text-secondary" style="margin-top:0.35rem;font-size:0.9rem;">
+        Slider bounds are derived from host capacity and your remaining quota.
+      </p>
+    </div>
 
-  <div style="background: white; padding: 2rem; border-radius: 8px; max-width: 600px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-    <form id="create-container-form" style="display: flex; flex-direction: column; gap: 1.5rem;">
-      
-      <!-- Name -->
-      <div>
-        <label for="name" style="display: block; font-weight: bold; margin-bottom: 0.5rem;">Container Name</label>
-        <input type="text" id="name" name="name" required pattern="[a-z0-9-]+" placeholder="e.g., web-server-01" style="width: 100%; padding: 0.5rem; border: 1px solid #d4d4d8; border-radius: 4px;" title="Lowercase alphanumeric and hyphens only">
-        <small style="color: #71717a;">Lowercase letters, numbers, and hyphens only.</small>
+    <!-- Quota / host availability banner -->
+    <div id="quota-banner" class="card" style="margin-bottom:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+        <h3 style="font-size:0.9rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);">Your Remaining Quota</h3>
+        <span id="host-error" class="badge" style="background:rgba(245,158,11,0.12);color:var(--amber);display:none;">LXD unavailable — using defaults</span>
       </div>
-
-      <!-- Image -->
-      <div>
-        <label for="image" style="display: block; font-weight: bold; margin-bottom: 0.5rem;">Base Image</label>
-        <select id="image" name="image" style="width: 100%; padding: 0.5rem; border: 1px solid #d4d4d8; border-radius: 4px;">
-          <option value="ubuntu/22.04">Ubuntu 22.04 LTS</option>
-          <option value="ubuntu/20.04">Ubuntu 20.04 LTS</option>
-          <option value="alpine/3.18">Alpine Linux 3.18</option>
-          <option value="debian/12">Debian 12</option>
-        </select>
+      <div id="quota-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0.75rem;">
+        <div style="background:var(--bg-elevated);padding:0.6rem;border-radius:var(--radius-sm);">
+          <div class="text-muted" style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;">CPU (cores)</div>
+          <div class="font-mono" style="font-size:1rem;font-weight:600;margin-top:0.15rem;" id="quota-cpu">—</div>
+        </div>
+        <div style="background:var(--bg-elevated);padding:0.6rem;border-radius:var(--radius-sm);">
+          <div class="text-muted" style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;">RAM (MB)</div>
+          <div class="font-mono" style="font-size:1rem;font-weight:600;margin-top:0.15rem;" id="quota-ram">—</div>
+        </div>
+        <div style="background:var(--bg-elevated);padding:0.6rem;border-radius:var(--radius-sm);">
+          <div class="text-muted" style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;">Disk (GB)</div>
+          <div class="font-mono" style="font-size:1rem;font-weight:600;margin-top:0.15rem;" id="quota-disk">—</div>
+        </div>
       </div>
+    </div>
 
-      <!-- CPU Limits -->
-      <div>
-        <label for="cpu_cores" style="display: block; font-weight: bold; margin-bottom: 0.5rem;">CPU Cores: <span id="cpu_val">1</span></label>
-        <input type="range" id="cpu_cores" name="cpu_cores" min="1" max="4" value="1" style="width: 100%;">
-      </div>
+    <!-- Creation form -->
+    <div class="card">
+      <form id="create-form" style="display:flex;flex-direction:column;gap:1.5rem;">
 
-      <!-- RAM Limits -->
-      <div>
-        <label for="ram_mb" style="display: block; font-weight: bold; margin-bottom: 0.5rem;">RAM: <span id="ram_val">512</span> MB</label>
-        <input type="range" id="ram_mb" name="ram_mb" min="256" max="8192" step="256" value="512" style="width: 100%;">
-      </div>
+        <!-- Name -->
+        <div class="form-group">
+          <label class="form-label" for="name">Container Name</label>
+          <input
+            class="form-control"
+            type="text"
+            id="name"
+            required
+            pattern="[a-z][a-z0-9-]{0,61}[a-z0-9]|[a-z]"
+            placeholder="e.g. web-server-01"
+            title="Lowercase letters, numbers, hyphens only. Must start with a letter."
+            autocomplete="off"
+          />
+          <p class="text-muted" style="font-size:0.8rem;margin-top:0.25rem;">Lowercase letters, numbers, and hyphens. Must start with a letter.</p>
+          <p id="name-validation" style="font-size:0.8rem;color:var(--red);display:none;"></p>
+        </div>
 
-      <!-- Toggles -->
-      <div style="display: flex; gap: 2rem;">
-        <label style="display: flex; align-items: center; gap: 0.5rem;">
-          <input type="checkbox" id="ephemeral" name="ephemeral">
-          Ephemeral (Destroy on stop)
-        </label>
-        
-        <label style="display: flex; align-items: center; gap: 0.5rem;">
-          <input type="checkbox" id="autostart" name="autostart" checked>
-          Start immediately
-        </label>
-      </div>
+        <!-- Base image -->
+        <div class="form-group">
+          <label class="form-label" for="image">Base Image</label>
+          <select class="form-control" id="image">
+            <option value="">Loading available images…</option>
+          </select>
+        </div>
 
-      <div id="error-msg" style="color: #dc2626; display: none; font-size: 0.875rem;"></div>
+        <!-- Description -->
+        <div class="form-group">
+          <label class="form-label" for="description">Description <span class="text-muted">(optional)</span></label>
+          <input class="form-control" type="text" id="description" placeholder="e.g. Production web server" maxlength="200" />
+        </div>
 
-      <button type="submit" id="submit-btn" style="background: #3b82f6; color: white; padding: 0.75rem; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 1rem;">
-        Deploy Container
-      </button>
-    </form>
+        <!-- CPU cores slider -->
+        <div class="form-group">
+          <label class="form-label" for="cpu-slider">
+            CPU Cores: <span id="cpu-val" style="color:var(--accent);font-size:1rem;">1</span>
+          </label>
+          <input type="range" id="cpu-slider" min="1" max="4" step="1" value="1"
+            style="width:100%;accent-color:var(--accent);height:4px;cursor:pointer;" />
+          <div style="display:flex;justify-content:space-between;">
+            <span class="text-muted" style="font-size:0.75rem;">1 core</span>
+            <span class="text-muted" id="cpu-max-label" style="font-size:0.75rem;">4 cores</span>
+          </div>
+        </div>
+
+        <!-- CPU allowance -->
+        <div class="form-group">
+          <label class="form-label" for="cpu-allowance">CPU Allowance <span class="text-muted">(% of allocated cores)</span></label>
+          <select class="form-control" id="cpu-allowance">
+            <option value="">Unrestricted</option>
+            <option value="100%">100%</option>
+            <option value="75%">75%</option>
+            <option value="50%">50%</option>
+            <option value="25%">25%</option>
+            <option value="10%">10%</option>
+          </select>
+          <p class="text-muted" style="font-size:0.8rem;margin-top:0.25rem;">Limits CPU burst over time (cgroup cpu.cfs_quota_us).</p>
+        </div>
+
+        <!-- RAM slider -->
+        <div class="form-group">
+          <label class="form-label" for="ram-slider">
+            RAM: <span id="ram-val" style="color:var(--accent);font-size:1rem;">512</span> MB
+          </label>
+          <input type="range" id="ram-slider" min="256" max="8192" step="256" value="512"
+            style="width:100%;accent-color:var(--accent);height:4px;cursor:pointer;" />
+          <div style="display:flex;justify-content:space-between;">
+            <span class="text-muted" style="font-size:0.75rem;">256 MB</span>
+            <span class="text-muted" id="ram-max-label" style="font-size:0.75rem;">8192 MB</span>
+          </div>
+        </div>
+
+        <!-- Disk size slider -->
+        <div class="form-group">
+          <label class="form-label" for="disk-slider">
+            Disk Size: <span id="disk-val" style="color:var(--accent);font-size:1rem;">0</span> GB
+            <span class="text-muted" style="font-size:0.75rem;text-transform:none;">(0 = pool default)</span>
+          </label>
+          <input type="range" id="disk-slider" min="0" max="50" step="1" value="0"
+            style="width:100%;accent-color:var(--accent);height:4px;cursor:pointer;" />
+          <div style="display:flex;justify-content:space-between;">
+            <span class="text-muted" style="font-size:0.75rem;">Pool default</span>
+            <span class="text-muted" id="disk-max-label" style="font-size:0.75rem;">50 GB</span>
+          </div>
+        </div>
+
+        <!-- Storage pool -->
+        <div class="form-group">
+          <label class="form-label" for="pool">Storage Pool</label>
+          <select class="form-control" id="pool">
+            <option value="default">default</option>
+          </select>
+        </div>
+
+        <!-- Network profile -->
+        <div class="form-group">
+          <label class="form-label" for="profile">Network Profile</label>
+          <select class="form-control" id="profile">
+            <option value="default">default</option>
+          </select>
+        </div>
+
+        <!-- Toggles -->
+        <div style="display:flex;gap:2rem;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.9rem;">
+            <input type="checkbox" id="ephemeral" style="accent-color:var(--accent);width:16px;height:16px;" />
+            <span>Ephemeral <span class="text-muted">(destroyed on stop)</span></span>
+          </label>
+          <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.9rem;">
+            <input type="checkbox" id="autostart" checked style="accent-color:var(--accent);width:16px;height:16px;" />
+            <span>Start immediately after creation</span>
+          </label>
+        </div>
+
+        <!-- Error / success messages -->
+        <div id="form-error"   class="alert alert-error"   style="display:none;"></div>
+        <div id="form-success" class="alert alert-success" style="display:none;"></div>
+
+        <button type="submit" id="submit-btn" class="btn btn-primary" style="align-self:flex-start;padding:0.65rem 2rem;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Deploy Container
+        </button>
+      </form>
+    </div>
   </div>
 
   <script>
-    import { fetchWithAuth } from '../lib/api.js';
+    import { api } from '../lib/api.js';
 
-    // RBAC Check: Kick non-admins out of this page immediately
+    // RBAC guard
     const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-    if (userData.role !== 'admin') {
-      window.location.href = '/';
+    if (userData.role !== 'admin') window.location.href = '/';
+
+    // ── Load host info & quota ────────────────────────────────────────────────
+    let hostData = { cpu_cores: 4, ram_mb: 8192 };
+    let userQuota = {};
+
+    async function loadHostInfo() {
+      const res = await api.get('/admin/host-info');
+      if (!res || !res.ok) {
+        document.getElementById('host-error').style.display = 'flex';
+        return;
+      }
+      const info = await res.json();
+      hostData = info.host || hostData;
+
+      // Populate image select
+      const imgSel = document.getElementById('image');
+      imgSel.innerHTML = (info.images || []).map(i =>
+        `<option value="${i.alias}">${i.description}</option>`
+      ).join('');
+
+      // Populate pool select
+      const poolSel = document.getElementById('pool');
+      poolSel.innerHTML = (info.pools || []).map(p =>
+        `<option value="${p.name}">${p.name} (${p.driver})</option>`
+      ).join('');
+
+      // Populate profile select
+      const profSel = document.getElementById('profile');
+      profSel.innerHTML = (info.profiles || []).map(p =>
+        `<option value="${p}">${p}</option>`
+      ).join('');
+
+      // Adjust sliders to host caps
+      const cpuMax  = hostData.cpu_cores  || 4;
+      const ramMax  = hostData.ram_mb     || 8192;
+
+      document.getElementById('cpu-slider').max = cpuMax;
+      document.getElementById('cpu-max-label').textContent = `${cpuMax} cores`;
+
+      document.getElementById('ram-slider').max = ramMax;
+      document.getElementById('ram-max-label').textContent = `${ramMax} MB`;
+
+      // Adjust disk max from pool info
+      const defaultPool = (info.pools || []).find(p => p.name === 'default');
+      if (defaultPool?.space_total) {
+        const diskMaxGb = Math.floor(defaultPool.space_total / (1024**3));
+        document.getElementById('disk-slider').max = diskMaxGb;
+        document.getElementById('disk-max-label').textContent = `${diskMaxGb} GB`;
+      }
     }
 
-    // Dynamic Slider Value Updates
-    document.getElementById('cpu_cores').addEventListener('input', (e) => {
-      document.getElementById('cpu_val').innerText = e.target.value;
+    async function loadQuota() {
+      const res = await api.get(`/users/${userData.id}/quota`);
+      if (!res || !res.ok) return;
+      userQuota = await res.json();
+
+      const remCpu  = (userQuota.max_cpu_cores || 4) - (userQuota.used_cpu_cores || 0);
+      const remRam  = (userQuota.max_ram_mb    || 8192) - (userQuota.used_ram_mb || 0);
+      const remDisk = (userQuota.max_disk_gb   || 50)   - (userQuota.used_disk_gb || 0);
+
+      document.getElementById('quota-cpu').textContent  = `${remCpu} remaining`;
+      document.getElementById('quota-ram').textContent  = `${remRam} remaining`;
+      document.getElementById('quota-disk').textContent = `${remDisk} remaining`;
+
+      // Clamp sliders to quota
+      const cpuSlider  = document.getElementById('cpu-slider');
+      if (remCpu < parseInt(cpuSlider.max)) {
+        cpuSlider.max = remCpu;
+        document.getElementById('cpu-max-label').textContent = `${remCpu} cores (your limit)`;
+      }
+      const ramSlider = document.getElementById('ram-slider');
+      if (remRam < parseInt(ramSlider.max)) {
+        ramSlider.max = remRam;
+        document.getElementById('ram-max-label').textContent = `${remRam} MB (your limit)`;
+      }
+    }
+
+    // ── Slider bindings ───────────────────────────────────────────────────────
+    document.getElementById('cpu-slider').addEventListener('input', e => {
+      document.getElementById('cpu-val').textContent = e.target.value;
     });
-    document.getElementById('ram_mb').addEventListener('input', (e) => {
-      document.getElementById('ram_val').innerText = e.target.value;
+    document.getElementById('ram-slider').addEventListener('input', e => {
+      document.getElementById('ram-val').textContent = e.target.value;
+    });
+    document.getElementById('disk-slider').addEventListener('input', e => {
+      document.getElementById('disk-val').textContent = e.target.value;
     });
 
-    // Form Submission
-    document.getElementById('create-container-form').addEventListener('submit', async (e) => {
+    // ── Name validation ───────────────────────────────────────────────────────
+    document.getElementById('name').addEventListener('input', e => {
+      const v   = e.target.value;
+      const msg = document.getElementById('name-validation');
+      const ok  = /^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z]$/.test(v);
+      msg.style.display = v && !ok ? 'block' : 'none';
+      msg.textContent   = 'Must start with a letter, contain only a-z, 0-9, hyphens.';
+    });
+
+    // ── Form submit ───────────────────────────────────────────────────────────
+    document.getElementById('create-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      
-      const btn = document.getElementById('submit-btn');
-      const errorDiv = document.getElementById('error-msg');
-      
-      btn.disabled = true;
-      btn.innerText = 'Deploying (This may take a minute)...';
-      errorDiv.style.display = 'none';
+      const btn     = document.getElementById('submit-btn');
+      const errDiv  = document.getElementById('form-error');
+      const succDiv = document.getElementById('form-success');
 
+      btn.disabled    = true;
+      btn.textContent = 'Deploying… (this may take a minute)';
+      errDiv.style.display  = 'none';
+      succDiv.style.display = 'none';
+
+      const diskVal = parseInt(document.getElementById('disk-slider').value);
       const payload = {
-        name: document.getElementById('name').value,
-        image: document.getElementById('image').value,
+        name:        document.getElementById('name').value.trim(),
+        image:       document.getElementById('image').value,
+        description: document.getElementById('description').value,
         limits: {
-          cpu_cores: parseInt(document.getElementById('cpu_cores').value),
-          ram_mb: parseInt(document.getElementById('ram_mb').value),
-          ephemeral: document.getElementById('ephemeral').checked,
-          autostart: document.getElementById('autostart').checked
-        }
+          cpu_cores:    parseInt(document.getElementById('cpu-slider').value),
+          cpu_allowance:document.getElementById('cpu-allowance').value,
+          ram_mb:       parseInt(document.getElementById('ram-slider').value),
+          disk_gb:      diskVal > 0 ? diskVal : null,
+          pool:         document.getElementById('pool').value,
+          profiles:     [document.getElementById('profile').value],
+          ephemeral:    document.getElementById('ephemeral').checked,
+          autostart:    document.getElementById('autostart').checked,
+        },
       };
 
       try {
-        const res = await fetchWithAuth('/containers', {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        });
-
-        if (res.ok) {
-          window.location.href = '/'; // Go back to dashboard on success
-        } else {
+        const res = await api.post('/containers', payload);
+        if (res && res.ok) {
+          succDiv.textContent  = `Container '${payload.name}' deployed successfully! Redirecting…`;
+          succDiv.style.display = 'block';
+          setTimeout(() => window.location.href = '/', 1500);
+        } else if (res) {
           const data = await res.json();
-          errorDiv.innerText = data.description || "Failed to create container.";
-          errorDiv.style.display = 'block';
+          errDiv.textContent  = data.description || 'Failed to create container.';
+          errDiv.style.display = 'block';
+          btn.disabled    = false;
+          btn.textContent = 'Deploy Container';
         }
       } catch (err) {
-        errorDiv.innerText = "Network error while creating container.";
-        errorDiv.style.display = 'block';
-      } finally {
-        btn.disabled = false;
-        btn.innerText = 'Deploy Container';
+        errDiv.textContent  = 'Network error connecting to the server.';
+        errDiv.style.display = 'block';
+        btn.disabled    = false;
+        btn.textContent = 'Deploy Container';
       }
     });
+
+    // ── Bootstrap ─────────────────────────────────────────────────────────────
+    loadHostInfo();
+    loadQuota();
   </script>
 </Layout>

@@ -1,61 +1,337 @@
 ---
-// src/pages/index.astro
+// src/pages/index.astro — Admin/User dashboard
 import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="Dashboard">
-  <header style="display: flex; justify-content: space-between; align-items: center;">
-    <h1>Your Containers</h1>
-    <!-- Only visible if admin, logic handled in JS below -->
-    <button id="btn-create" style="display: none; padding: 0.5rem 1rem; background: #3b82f6; color: white; border: none;">+ New Container</button>
-  </header>
-
-  <div id="container-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; margin-top: 2rem;">
-    <p>Loading metrics...</p>
+  <!-- Page header -->
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2rem; flex-wrap:wrap; gap:1rem;">
+    <div>
+      <h1 style="font-size:1.75rem; font-weight:700; letter-spacing:-0.02em;">Containers</h1>
+      <p class="text-secondary" style="margin-top:0.25rem; font-size:0.9rem;">Live status updates every 10 seconds</p>
+    </div>
+    <div style="display:flex; gap:0.75rem; align-items:center;">
+      <span id="last-updated" class="text-muted" style="font-size:0.8125rem;"></span>
+      <a href="/create" id="btn-create" class="btn btn-primary" style="display:none;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        New Container
+      </a>
+    </div>
   </div>
 
-  <script>
-    import { fetchWithAuth } from '../lib/api.js';
+  <!-- Container grid -->
+  <div id="container-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:1.25rem;">
+    <div class="card" style="animation:pulse-loading 1.5s ease infinite;">
+      <div style="height:1rem; background:var(--bg-elevated); border-radius:4px; width:40%; margin-bottom:1rem;"></div>
+      <div style="height:0.75rem; background:var(--bg-elevated); border-radius:4px; width:70%; margin-bottom:0.5rem;"></div>
+      <div style="height:0.75rem; background:var(--bg-elevated); border-radius:4px; width:55%;"></div>
+    </div>
+  </div>
 
+  <!-- Empty state -->
+  <div id="empty-state" style="display:none; text-align:center; padding:5rem 2rem;">
+    <div style="font-size:3rem; margin-bottom:1rem; opacity:0.3;">⬡</div>
+    <p style="color:var(--text-secondary); font-size:1rem;">No containers assigned to you.</p>
+    <p class="text-muted" style="font-size:0.875rem; margin-top:0.5rem;">Ask an administrator to grant you access.</p>
+  </div>
+
+  <!-- Error state -->
+  <div id="error-state" style="display:none;" class="alert alert-error" style="margin-top:2rem;"></div>
+
+  <!-- Delete confirmation modal -->
+  <div class="modal-overlay" id="delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+    <div class="modal">
+      <h3 id="delete-modal-title" style="margin-bottom:0.75rem; font-size:1.1rem;">Delete Container?</h3>
+      <p class="text-secondary" style="font-size:0.9rem; margin-bottom:1.5rem;">
+        This will permanently destroy <strong id="delete-target-name" style="color:var(--red);"></strong> and all its data.
+        This action cannot be undone.
+      </p>
+      <div style="display:flex; gap:0.75rem; justify-content:flex-end;">
+        <button class="btn btn-ghost" onclick="closeDeleteModal()">Cancel</button>
+        <button class="btn btn-danger" id="confirm-delete-btn" onclick="confirmDelete()">Delete permanently</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    @keyframes pulse-loading {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.5; }
+    }
+
+    .container-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      animation: card-appear 0.3s ease forwards;
+    }
+    @keyframes card-appear {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .container-card:hover {
+      border-color: var(--border-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .metric-item {
+      background: var(--bg-elevated);
+      border-radius: var(--radius-sm);
+      padding: 0.6rem 0.85rem;
+    }
+
+    .metric-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 0.2rem;
+    }
+
+    .metric-value {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+    }
+
+    .action-bar {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .view-link {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.8125rem;
+      color: var(--accent);
+      text-decoration: none;
+      padding: 0.3rem 0.5rem;
+      border-radius: var(--radius-sm);
+      transition: all 0.18s ease;
+    }
+    .view-link:hover { background: rgba(99,102,241,0.1); }
+  </style>
+
+  <script>
+    import { api } from '../lib/api.js';
+
+    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+    const isAdmin  = userData.role === 'admin';
+
+    if (isAdmin) {
+      document.getElementById('btn-create').style.display = 'flex';
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    function fmtBytes(bytes, decimals = 1) {
+      if (!bytes || bytes === 0) return '0 B';
+      const k = 1024, sizes = ['B','KB','MB','GB','TB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return `${parseFloat((bytes / Math.pow(k, i)).toFixed(decimals))} ${sizes[i]}`;
+    }
+
+    function statusBadge(status) {
+      const map = {
+        Running: 'badge-running', Stopped: 'badge-stopped',
+        Frozen: 'badge-frozen', Error: 'badge-error',
+      };
+      return `<span class="badge ${map[status] || 'badge-error'}">${status}</span>`;
+    }
+
+    function memBar(used, total, limitRaw) {
+      if (!total || total === 0) return '';
+      const pct = Math.min(100, Math.round((used / total) * 100));
+      const color = pct > 85 ? 'var(--red)' : pct > 65 ? 'var(--amber)' : 'var(--green)';
+      return `
+        <div class="stat-bar" style="margin-top:0.3rem;">
+          <div class="stat-bar-fill" style="width:${pct}%; background:${color};"></div>
+        </div>
+        <span style="font-size:0.7rem; color:var(--text-muted); margin-top:0.15rem; display:block;">${pct}% of ${limitRaw || fmtBytes(total)}</span>
+      `;
+    }
+
+    function adminActions(name, status) {
+      if (!isAdmin) return '';
+      const isPaused  = status === 'Frozen';
+      const isRunning = status === 'Running';
+      const isStopped = status === 'Stopped';
+
+      return `
+        <div class="action-bar" id="action-bar-${name}">
+          ${isStopped  ? `<button class="btn btn-success btn-sm" onclick="doAction('${name}','start')">▶ Start</button>` : ''}
+          ${isRunning  ? `<button class="btn btn-ghost btn-sm"   onclick="doAction('${name}','stop')">■ Stop</button>` : ''}
+          ${isRunning  ? `<button class="btn btn-ghost btn-sm"   onclick="doAction('${name}','restart')">↺ Restart</button>` : ''}
+          ${isRunning  ? `<button class="btn btn-amber btn-sm"   onclick="doAction('${name}','freeze')">❄ Freeze</button>` : ''}
+          ${isPaused   ? `<button class="btn btn-success btn-sm" onclick="doAction('${name}','unfreeze')">▶ Unfreeze</button>` : ''}
+          <a href="/container/${name}" class="view-link">Details →</a>
+          <button class="btn btn-danger btn-sm" style="margin-left:0;" onclick="openDeleteModal('${name}')">✕ Delete</button>
+        </div>
+      `;
+    }
+
+    function renderCard(c) {
+      const memPct   = c.mem_total > 0 ? Math.round((c.mem_used / c.mem_total) * 100) : 0;
+      const memColor = memPct > 85 ? 'var(--red)' : memPct > 65 ? 'var(--amber)' : 'var(--green)';
+
+      return `
+        <div class="container-card" id="card-${c.name}">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.75rem;">
+            <div>
+              <h2 style="font-size:1rem; font-weight:600; margin-bottom:0.3rem; font-family:var(--font-mono);">${c.name}</h2>
+              <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                ${statusBadge(c.status)}
+                ${c.ipv4 && c.ipv4 !== 'N/A' ? `<span class="badge" style="background:rgba(59,130,246,0.1); color:var(--blue);">${c.ipv4}</span>` : ''}
+              </div>
+            </div>
+            <a href="/container/${c.name}" class="view-link" style="flex-shrink:0;">
+              Details →
+            </a>
+          </div>
+
+          <!-- Metrics grid -->
+          <div class="metric-row">
+            <div class="metric-item">
+              <div class="metric-label">RAM Used</div>
+              <div class="metric-value">${fmtBytes(c.mem_used)}</div>
+              ${c.mem_total > 0 ? `
+                <div class="stat-bar" style="margin-top:0.3rem;">
+                  <div class="stat-bar-fill" style="width:${memPct}%; background:${memColor};"></div>
+                </div>
+                <span style="font-size:0.7rem;color:var(--text-muted);margin-top:0.15rem;display:block;">${memPct}% of ${c.mem_limit_raw || fmtBytes(c.mem_total)}</span>
+              ` : ''}
+            </div>
+
+            <div class="metric-item">
+              <div class="metric-label">Disk Used</div>
+              <div class="metric-value">${fmtBytes(c.disk_used)}</div>
+            </div>
+
+            <div class="metric-item">
+              <div class="metric-label">Network RX / TX</div>
+              <div class="metric-value" style="font-size:0.78rem;">${fmtBytes(c.net_rx)} / ${fmtBytes(c.net_tx)}</div>
+            </div>
+
+            <div class="metric-item">
+              <div class="metric-label">Processes</div>
+              <div class="metric-value">${c.processes ?? '—'}</div>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <span style="font-size:0.75rem; color:var(--text-muted);">
+              CPU: <span style="color:var(--text-secondary);">${c.cpu_limit || '—'}</span>
+            </span>
+            ${c.architecture ? `<span style="font-size:0.75rem; color:var(--text-muted);">
+              Arch: <span style="color:var(--text-secondary);">${c.architecture}</span>
+            </span>` : ''}
+          </div>
+
+          ${isAdmin ? adminActions(c.name, c.status) : `
+            <div style="padding-top:0.75rem; border-top:1px solid var(--border);">
+              <a href="/container/${c.name}" class="view-link" style="margin-left:0;">View Metrics & Terminal →</a>
+            </div>
+          `}
+        </div>
+      `;
+    }
+
+    // ── Load & Render ─────────────────────────────────────────────────────────
     async function loadContainers() {
-      const res = await fetchWithAuth('/containers');
+      const res = await api.get('/containers');
       if (!res) return;
 
-      const containers = await res.json();
-      const grid = document.getElementById('container-grid');
-      
-      if (containers.length === 0) {
-        grid.innerHTML = '<p>No containers assigned to you.</p>';
+      document.getElementById('last-updated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+
+      if (!res.ok) {
+        document.getElementById('error-state').style.display = 'block';
+        document.getElementById('error-state').textContent   = 'Failed to load containers.';
         return;
       }
 
-      // Render the containers (Hydration)
-      grid.innerHTML = containers.map(c => `
-        <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-          <h3 style="margin-top: 0;">${c.name}</h3>
-          <span style="display: inline-block; padding: 0.25rem 0.5rem; background: ${c.status === 'Running' ? '#dcfce7' : '#fee2e2'}; color: ${c.status === 'Running' ? '#166534' : '#991b1b'}; border-radius: 999px; font-size: 0.875rem;">
-            ${c.status}
-          </span>
-          <div style="margin-top: 1rem; font-size: 0.875rem; color: #4b5563;">
-            <p><strong>IPv4:</strong> ${c.ipv4}</p>
-            <p><strong>OS:</strong> ${c.architecture}</p>
-          </div>
-          <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
-            <a href="/container/${c.name}" style="text-decoration: none; color: #3b82f6; font-size: 0.875rem;">View Metrics & Terminal &rarr;</a>
-          </div>
-        </div>
-      `).join('');
+      const containers = await res.json();
+      const grid       = document.getElementById('container-grid');
+      const empty      = document.getElementById('empty-state');
+
+      if (containers.length === 0) {
+        grid.style.display  = 'none';
+        empty.style.display = 'block';
+        return;
+      }
+
+      grid.style.display  = 'grid';
+      empty.style.display = 'none';
+      grid.innerHTML      = containers.map(renderCard).join('');
     }
 
-    // RBAC: Show create button only to admins
-    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-    if (userData.role === 'admin') {
-      document.getElementById('btn-create').style.display = 'block';
-    }
+    // ── Lifecycle actions ─────────────────────────────────────────────────────
+    window.doAction = async (name, action) => {
+      const bar = document.getElementById(`action-bar-${name}`);
+      if (bar) bar.style.opacity = '0.4';
 
-    // Initial load and polling setup
+      const res = await api.post(`/containers/${name}/action`, { action });
+      if (res && res.ok) {
+        await loadContainers();
+      } else if (res) {
+        const d = await res.json();
+        alert(`Action failed: ${d.description || 'Unknown error'}`);
+        if (bar) bar.style.opacity = '1';
+      }
+    };
+
+    // ── Delete modal ──────────────────────────────────────────────────────────
+    let _deleteTarget = null;
+    window.openDeleteModal = (name) => {
+      _deleteTarget = name;
+      document.getElementById('delete-target-name').textContent = name;
+      document.getElementById('delete-modal').classList.add('open');
+    };
+    window.closeDeleteModal = () => {
+      _deleteTarget = null;
+      document.getElementById('delete-modal').classList.remove('open');
+    };
+    window.confirmDelete = async () => {
+      if (!_deleteTarget) return;
+      const btn = document.getElementById('confirm-delete-btn');
+      btn.disabled    = true;
+      btn.textContent = 'Deleting…';
+
+      const res = await api.post(`/containers/${_deleteTarget}/action`, { action: 'delete' });
+      closeDeleteModal();
+      btn.disabled    = false;
+      btn.textContent = 'Delete permanently';
+
+      if (res && res.ok) {
+        await loadContainers();
+      } else if (res) {
+        const d = await res.json();
+        alert(`Delete failed: ${d.description || 'Unknown error'}`);
+      }
+    };
+
+    // Close modal on backdrop click
+    document.getElementById('delete-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeDeleteModal();
+    });
+
     loadContainers();
-    // Poll for status updates every 10 seconds to match the backend collector
     setInterval(loadContainers, 10000);
   </script>
 </Layout>

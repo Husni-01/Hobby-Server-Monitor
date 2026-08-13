@@ -1,0 +1,229 @@
+---
+// src/pages/accounting.astro — Admin: Host-wide resource accounting (Main Process 1.5)
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Resource Accounting">
+  <div style="margin-bottom:2rem;">
+    <h1 style="font-size:1.75rem;font-weight:700;letter-spacing:-0.02em;">Resource Accounting</h1>
+    <p class="text-secondary" style="margin-top:0.35rem;font-size:0.9rem;">
+      Total allocated vs. available host resources, and per-user quota utilisation.
+    </p>
+  </div>
+
+  <!-- Host Totals -->
+  <div class="card" style="margin-bottom:1.75rem;">
+    <h2 style="font-size:1rem;font-weight:600;margin-bottom:1.25rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);">Host Capacity</h2>
+    <div id="host-totals" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;">
+      <div style="text-align:center;padding:1rem;color:var(--text-muted);">Loading…</div>
+    </div>
+  </div>
+
+  <!-- Allocation summary bars -->
+  <div class="card" style="margin-bottom:1.75rem;">
+    <h2 style="font-size:1rem;font-weight:600;margin-bottom:1.25rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);">Allocated vs. Available</h2>
+    <div id="allocation-bars" style="display:flex;flex-direction:column;gap:1.25rem;"></div>
+  </div>
+
+  <!-- Per-user table -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;">
+      <h2 style="font-size:1rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);">Per-User Allocation</h2>
+      <button class="btn btn-ghost btn-sm" onclick="loadAccounting()">↺ Refresh</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table id="user-table" style="width:100%;border-collapse:collapse;font-size:0.875rem;">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border);color:var(--text-muted);">
+            <th style="text-align:left;padding:0.5rem 0.75rem;font-weight:500;">User</th>
+            <th style="text-align:right;padding:0.5rem 0.75rem;font-weight:500;">Containers</th>
+            <th style="text-align:right;padding:0.5rem 0.75rem;font-weight:500;">CPU Used / Quota</th>
+            <th style="text-align:right;padding:0.5rem 0.75rem;font-weight:500;">RAM Used / Quota</th>
+            <th style="text-align:right;padding:0.5rem 0.75rem;font-weight:500;">Disk Used / Quota</th>
+          </tr>
+        </thead>
+        <tbody id="user-table-body">
+          <tr><td colspan="5" style="padding:1.5rem;text-align:center;color:var(--text-muted);">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <style>
+    .host-stat {
+      background: var(--bg-elevated);
+      border-radius: var(--radius-md);
+      padding: 1.25rem;
+      text-align: center;
+    }
+    .host-stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.25rem;
+    }
+    .host-stat-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+    .alloc-row { display: flex; flex-direction: column; gap: 0.4rem; }
+    .alloc-label { display:flex; justify-content:space-between; font-size:0.875rem; }
+    .alloc-bar { height: 10px; background: var(--bg-elevated); border-radius: 5px; overflow: hidden; }
+    .alloc-fill { height: 100%; border-radius: 5px; transition: width 0.5s ease; }
+
+    table tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+    table tbody tr:hover td { background: var(--bg-elevated); }
+    table td { padding: 0.6rem 0.75rem; }
+
+    .quota-bar-cell {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.5rem;
+    }
+    .mini-bar {
+      width: 60px;
+      height: 6px;
+      background: var(--bg-elevated);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .mini-bar-fill { height: 100%; border-radius: 3px; }
+  </style>
+
+  <script>
+    import { api } from '../lib/api.js';
+
+    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+    if (userData.role !== 'admin') window.location.href = '/';
+
+    function fmtBytes(b, d=1) {
+      if (!b || b===0) return '0 B';
+      const k=1024, s=['B','KB','MB','GB','TB'];
+      const i=Math.floor(Math.log(b)/Math.log(k));
+      return `${(b/Math.pow(k,i)).toFixed(d)} ${s[i]}`;
+    }
+
+    function barColor(pct) {
+      if (pct > 90) return 'var(--red)';
+      if (pct > 70) return 'var(--amber)';
+      return 'var(--accent)';
+    }
+
+    function pct(used, total) {
+      if (!total || total === 0) return 0;
+      return Math.min(100, Math.round((used / total) * 100));
+    }
+
+    async function loadAccounting() {
+      const res = await api.get('/admin/accounting');
+      if (!res || !res.ok) {
+        document.getElementById('host-totals').innerHTML = '<p class="text-muted">Failed to load accounting data.</p>';
+        return;
+      }
+      const data = await res.json();
+      const host  = data.host || {};
+      const users = data.per_user || [];
+
+      // ── Host totals ────────────────────────────────────────────────────────
+      document.getElementById('host-totals').innerHTML = `
+        <div class="host-stat">
+          <div class="host-stat-value">${host.cpu_cores ?? '—'}</div>
+          <div class="host-stat-label">Total CPU Cores</div>
+        </div>
+        <div class="host-stat">
+          <div class="host-stat-value">${host.ram_mb ? Math.round(host.ram_mb/1024) : '—'}</div>
+          <div class="host-stat-label">Total RAM (GB)</div>
+        </div>
+        ${host.error ? `<div class="host-stat" style="grid-column:1/-1;">
+          <p style="color:var(--amber);font-size:0.85rem;">⚠ ${host.error}</p>
+        </div>` : ''}
+      `;
+
+      // ── Allocation bars ────────────────────────────────────────────────────
+      // Sum up user allocations
+      const totalAllocCpu = users.reduce((s, u) => s + (u.used_cpu_cores || 0), 0);
+      const totalAllocRam = users.reduce((s, u) => s + (u.used_ram_mb    || 0), 0);
+      const hostCpu       = host.cpu_cores || 1;
+      const hostRam       = host.ram_mb    || 1;
+      const cpuPct        = pct(totalAllocCpu, hostCpu);
+      const ramPct        = pct(totalAllocRam, hostRam);
+
+      document.getElementById('allocation-bars').innerHTML = `
+        <div class="alloc-row">
+          <div class="alloc-label">
+            <span>CPU — <span style="color:var(--text-primary);">${totalAllocCpu}</span> cores allocated of <span style="color:var(--text-primary);">${hostCpu}</span> total</span>
+            <span style="color:${barColor(cpuPct)};font-weight:600;">${cpuPct}%</span>
+          </div>
+          <div class="alloc-bar">
+            <div class="alloc-fill" style="width:${cpuPct}%;background:${barColor(cpuPct)};"></div>
+          </div>
+        </div>
+        <div class="alloc-row">
+          <div class="alloc-label">
+            <span>RAM — <span style="color:var(--text-primary);">${totalAllocRam}</span> MB allocated of <span style="color:var(--text-primary);">${hostRam}</span> MB total</span>
+            <span style="color:${barColor(ramPct)};font-weight:600;">${ramPct}%</span>
+          </div>
+          <div class="alloc-bar">
+            <div class="alloc-fill" style="width:${ramPct}%;background:${barColor(ramPct)};"></div>
+          </div>
+        </div>
+      `;
+
+      // ── Per-user table ────────────────────────────────────────────────────
+      if (users.length === 0) {
+        document.getElementById('user-table-body').innerHTML =
+          '<tr><td colspan="5" style="padding:1.5rem;text-align:center;color:var(--text-muted);">No users yet.</td></tr>';
+        return;
+      }
+
+      document.getElementById('user-table-body').innerHTML = users.map(u => {
+        const cpuP  = pct(u.used_cpu_cores, u.max_cpu_cores);
+        const ramP  = pct(u.used_ram_mb,    u.max_ram_mb);
+        const diskP = pct(u.used_disk_gb,   u.max_disk_gb);
+
+        const miniBar = (p) => `
+          <div class="mini-bar">
+            <div class="mini-bar-fill" style="width:${p}%;background:${barColor(p)};"></div>
+          </div>
+          <span style="color:${barColor(p)};font-size:0.75rem;font-weight:600;min-width:2.5rem;text-align:right;">${p}%</span>
+        `;
+
+        return `
+          <tr>
+            <td>
+              <div style="font-weight:500;">${u.email}</div>
+            </td>
+            <td style="text-align:right;font-family:var(--font-mono);">${u.container_count}</td>
+            <td style="text-align:right;">
+              <div class="quota-bar-cell">
+                <span class="text-secondary">${u.used_cpu_cores}/${u.max_cpu_cores}</span>
+                ${miniBar(cpuP)}
+              </div>
+            </td>
+            <td style="text-align:right;">
+              <div class="quota-bar-cell">
+                <span class="text-secondary">${u.used_ram_mb}/${u.max_ram_mb} MB</span>
+                ${miniBar(ramP)}
+              </div>
+            </td>
+            <td style="text-align:right;">
+              <div class="quota-bar-cell">
+                <span class="text-secondary">${u.used_disk_gb}/${u.max_disk_gb} GB</span>
+                ${miniBar(diskP)}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    loadAccounting();
+  </script>
+</Layout>

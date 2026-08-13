@@ -1,58 +1,84 @@
+"""
+auth.py — Google OAuth token verification and local JWT issuance.
+
+Bootstrap admin mechanism:
+  Set BOOTSTRAP_ADMIN_EMAIL in the environment before first run.
+  On the first sign-in attempt by that email the account is created and
+  promoted to 'admin'. This cannot be triggered a second time because
+  subsequent sign-ins find the existing user row and return it directly.
+
+Session design:
+  Stateless JWTs (12h TTL). Logout is handled client-side by deleting the token
+  from localStorage. The backend has no session store to invalidate — a deliberate
+  trade-off for operational simplicity on a hobby server. If a token is stolen
+  the window of exposure is at most 12 hours.
+"""
+
 import os
-import jwt
 import datetime
+import jwt
 from google.oauth2 import id_token
 from google.auth.transport import requests
-import sqlite3
+from database import DB_PATH, get_db
 
-# Load from environment variables
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
-SESSION_SECRET = os.environ.get("SESSION_SECRET", "fallback-dev-secret-change-me")
+GOOGLE_CLIENT_ID     = os.environ.get("GOOGLE_CLIENT_ID")
+SESSION_SECRET       = os.environ.get("SESSION_SECRET", "fallback-dev-secret-change-me")
 BOOTSTRAP_ADMIN_EMAIL = os.environ.get("BOOTSTRAP_ADMIN_EMAIL")
-DB_PATH = "hobby_monitor.db"
+
 
 def verify_google_token(token: str):
-    """Verifies the Google OAuth ID token and extracts user info."""
+    """
+    Validates a Google ID token and returns the verified email address,
+    or None if the token is invalid or the client ID is not configured.
+    """
+    if not GOOGLE_CLIENT_ID:
+        print("[Auth] Warning: GOOGLE_CLIENT_ID not set; token verification disabled.")
+        return None
     try:
         idinfo = id_token.verify_oauth2_token(token, requests.Request(), GOOGLE_CLIENT_ID)
-        return idinfo['email']
+        return idinfo.get("email")
     except ValueError:
         return None
 
+
 def get_or_create_user(email: str):
     """
-    Handles the bootstrap logic: First user matching the env variable gets admin.
-    Otherwise, checks if the user exists (invited by admin).
+    Looks up the user in SQLite.
+    If the user does not exist and their email matches BOOTSTRAP_ADMIN_EMAIL,
+    creates the admin account. Otherwise returns None (access denied).
     """
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_db()
     cursor = conn.cursor()
 
     cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
     user = cursor.fetchone()
 
     if user:
+        conn.close()
         return dict(user)
 
-    # If user doesn't exist, check if they are the bootstrap admin
-    if email == BOOTSTRAP_ADMIN_EMAIL:
+    # First-time bootstrap: create admin account
+    if BOOTSTRAP_ADMIN_EMAIL and email == BOOTSTRAP_ADMIN_EMAIL:
         cursor.execute(
-            "INSERT INTO users (email, role) VALUES (?, ?)", 
-            (email, 'admin')
+            "INSERT INTO users (email, role) VALUES (?, ?)",
+            (email, "admin")
         )
         conn.commit()
         cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
-        return dict(cursor.fetchone())
+        user = dict(cursor.fetchone())
+        conn.close()
+        return user
 
-    # User is not in the database and is not the bootstrap admin
+    conn.close()
     return None
 
-def generate_jwt(user_dict: dict):
+
+def generate_jwt(user_dict: dict) -> str:
     """Issues a stateless session token valid for 12 hours."""
     payload = {
-        'sub': user_dict['id'],
-        'email': user_dict['email'],
-        'role': user_dict['role'],
-        'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=12)
+        "sub":   user_dict["id"],
+        "email": user_dict["email"],
+        "role":  user_dict["role"],
+        "exp":   datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=12),
     }
-    return jwt.encode(payload, SESSION_SECRET, algorithm='HS256')
+    return jwt.encode(payload, SESSION_SECRET, algorithm="HS256")

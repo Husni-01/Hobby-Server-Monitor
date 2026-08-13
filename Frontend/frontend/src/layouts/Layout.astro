@@ -8,52 +8,439 @@ const { title } = Astro.props;
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="LXD Monitor — Self-hosted container management dashboard" />
     <title>{title} | LXD Monitor</title>
-    <style>
-      body { font-family: system-ui, sans-serif; margin: 0; background: #f4f4f5; color: #18181b; }
-      .navbar { background: #18181b; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
-      .navbar a { color: #a1a1aa; text-decoration: none; font-size: 0.875rem; transition: color 0.2s; }
-      .navbar a:hover { color: white; }
-      .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
-      button.logout { background: transparent; color: #f87171; border: 1px solid #f87171; padding: 0.25rem 0.75rem; border-radius: 4px; cursor: pointer; font-size: 0.875rem; }
-      button.logout:hover { background: #fee2e2; }
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+    <style is:global>
+      /* ── Design tokens ─────────────────────────────────────────────────── */
+      :root {
+        --bg-base:      #0a0b0f;
+        --bg-card:      #111318;
+        --bg-elevated:  #1a1d27;
+        --bg-input:     #1e2130;
+        --border:       rgba(255,255,255,0.07);
+        --border-hover: rgba(255,255,255,0.14);
+
+        --text-primary:   #f0f2f8;
+        --text-secondary: #8b95b0;
+        --text-muted:     #505670;
+
+        --accent:       #6366f1;   /* indigo */
+        --accent-glow:  rgba(99,102,241,0.25);
+        --accent-hover: #7c7ff5;
+
+        --green:  #22c55e;
+        --red:    #ef4444;
+        --amber:  #f59e0b;
+        --blue:   #3b82f6;
+        --purple: #a855f7;
+
+        --radius-sm:  6px;
+        --radius-md:  10px;
+        --radius-lg:  16px;
+
+        --shadow-sm:  0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+        --shadow-md:  0 4px 16px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.3);
+        --shadow-glow:0 0 24px var(--accent-glow);
+
+        --transition: 0.18s ease;
+
+        --font-sans:  'Inter', system-ui, sans-serif;
+        --font-mono:  'JetBrains Mono', 'Fira Code', monospace;
+      }
+
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      html { scroll-behavior: smooth; }
+
+      body {
+        font-family: var(--font-sans);
+        background:  var(--bg-base);
+        color:       var(--text-primary);
+        min-height:  100vh;
+        line-height: 1.6;
+        font-size:   15px;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ── Scrollbar ─────────────────────────────────────────────────────── */
+      ::-webkit-scrollbar        { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track  { background: var(--bg-base); }
+      ::-webkit-scrollbar-thumb  { background: var(--bg-elevated); border-radius: 3px; }
+
+      /* ── Navbar ────────────────────────────────────────────────────────── */
+      .navbar {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 2rem;
+        height: 60px;
+        background: rgba(10,11,15,0.82);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .navbar-brand {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-weight: 700;
+        font-size: 1rem;
+        color: var(--text-primary);
+        text-decoration: none;
+        letter-spacing: -0.01em;
+      }
+
+      .navbar-brand .brand-icon {
+        width: 28px;
+        height: 28px;
+        background: linear-gradient(135deg, var(--accent), var(--purple));
+        border-radius: var(--radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        box-shadow: var(--shadow-glow);
+      }
+
+      .navbar-nav {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+      }
+
+      .navbar-nav a {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.4rem 0.9rem;
+        border-radius: var(--radius-sm);
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-size: 0.875rem;
+        font-weight: 500;
+        transition: all var(--transition);
+      }
+
+      .navbar-nav a:hover, .navbar-nav a.active {
+        color: var(--text-primary);
+        background: var(--bg-elevated);
+      }
+
+      .navbar-right {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .user-badge {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.35rem 0.75rem;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        font-size: 0.8125rem;
+        color: var(--text-secondary);
+      }
+
+      .user-badge .role-chip {
+        padding: 0.1rem 0.45rem;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .role-chip.admin { background: rgba(99,102,241,0.2); color: var(--accent); }
+      .role-chip.user  { background: rgba(34,197,94,0.15); color: var(--green); }
+
+      .btn-logout {
+        background: transparent;
+        border: 1px solid rgba(239,68,68,0.4);
+        color: #ef9090;
+        padding: 0.35rem 0.8rem;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        font-size: 0.8125rem;
+        font-family: var(--font-sans);
+        transition: all var(--transition);
+      }
+
+      .btn-logout:hover {
+        background: rgba(239,68,68,0.12);
+        border-color: var(--red);
+        color: var(--red);
+      }
+
+      /* ── Page shell ────────────────────────────────────────────────────── */
+      .page-container {
+        max-width: 1320px;
+        margin: 0 auto;
+        padding: 2.5rem 2rem;
+      }
+
+      /* ── Cards ─────────────────────────────────────────────────────────── */
+      .card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        transition: border-color var(--transition), box-shadow var(--transition);
+      }
+
+      .card:hover { border-color: var(--border-hover); }
+
+      /* ── Buttons ───────────────────────────────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        padding: 0.5rem 1.1rem;
+        border-radius: var(--radius-sm);
+        border: none;
+        cursor: pointer;
+        font-size: 0.875rem;
+        font-weight: 500;
+        font-family: var(--font-sans);
+        transition: all var(--transition);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .btn-primary {
+        background: var(--accent);
+        color: white;
+        box-shadow: 0 0 20px var(--accent-glow);
+      }
+      .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
+
+      .btn-ghost {
+        background: var(--bg-elevated);
+        color: var(--text-secondary);
+        border: 1px solid var(--border);
+      }
+      .btn-ghost:hover { color: var(--text-primary); border-color: var(--border-hover); }
+
+      .btn-danger {
+        background: rgba(239,68,68,0.12);
+        color: var(--red);
+        border: 1px solid rgba(239,68,68,0.3);
+      }
+      .btn-danger:hover { background: rgba(239,68,68,0.22); }
+
+      .btn-success {
+        background: rgba(34,197,94,0.12);
+        color: var(--green);
+        border: 1px solid rgba(34,197,94,0.3);
+      }
+      .btn-success:hover { background: rgba(34,197,94,0.22); }
+
+      .btn-amber {
+        background: rgba(245,158,11,0.12);
+        color: var(--amber);
+        border: 1px solid rgba(245,158,11,0.3);
+      }
+      .btn-amber:hover { background: rgba(245,158,11,0.22); }
+
+      .btn-sm { padding: 0.3rem 0.7rem; font-size: 0.8125rem; }
+      .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+      /* ── Status badges ─────────────────────────────────────────────────── */
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+      .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; }
+
+      .badge-running { background: rgba(34,197,94,0.12);  color: var(--green);  }
+      .badge-running::before { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse-green 2s infinite; }
+      .badge-stopped { background: rgba(239,68,68,0.12);  color: var(--red);    }
+      .badge-stopped::before { background: var(--red); }
+      .badge-frozen  { background: rgba(59,130,246,0.12); color: var(--blue);   }
+      .badge-frozen::before { background: var(--blue); }
+      .badge-error   { background: rgba(245,158,11,0.12); color: var(--amber);  }
+      .badge-error::before { background: var(--amber); }
+
+      @keyframes pulse-green {
+        0%, 100% { box-shadow: 0 0 4px var(--green); }
+        50%       { box-shadow: 0 0 10px var(--green); }
+      }
+
+      /* ── Form elements ─────────────────────────────────────────────────── */
+      .form-group { display: flex; flex-direction: column; gap: 0.5rem; }
+      .form-label {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .form-control {
+        background: var(--bg-input);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-primary);
+        padding: 0.55rem 0.85rem;
+        font-size: 0.9rem;
+        font-family: var(--font-sans);
+        transition: border-color var(--transition), box-shadow var(--transition);
+        width: 100%;
+      }
+      .form-control:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-glow);
+      }
+      .form-control::placeholder { color: var(--text-muted); }
+
+      select.form-control option { background: var(--bg-elevated); }
+
+      /* ── Progress / stat bars ──────────────────────────────────────────── */
+      .stat-bar {
+        height: 6px;
+        background: var(--bg-elevated);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .stat-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.5s ease;
+      }
+
+      /* ── Alert boxes ───────────────────────────────────────────────────── */
+      .alert {
+        padding: 0.75rem 1rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.875rem;
+        border-left: 3px solid;
+      }
+      .alert-error   { background: rgba(239,68,68,0.1);  border-color: var(--red);   color: #f87171; }
+      .alert-success { background: rgba(34,197,94,0.1);  border-color: var(--green); color: #4ade80; }
+      .alert-info    { background: rgba(99,102,241,0.1); border-color: var(--accent);color: #a5b4fc; }
+
+      /* ── Modal overlay ─────────────────────────────────────────────────── */
+      .modal-overlay {
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,0.7);
+        backdrop-filter: blur(4px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 1000;
+        opacity: 0; pointer-events: none;
+        transition: opacity 0.2s ease;
+      }
+      .modal-overlay.open { opacity: 1; pointer-events: all; }
+      .modal {
+        background: var(--bg-card);
+        border: 1px solid var(--border-hover);
+        border-radius: var(--radius-lg);
+        padding: 2rem;
+        max-width: 480px;
+        width: calc(100% - 2rem);
+        box-shadow: var(--shadow-md);
+        transform: translateY(8px);
+        transition: transform 0.2s ease;
+      }
+      .modal-overlay.open .modal { transform: translateY(0); }
+
+      /* ── Utility ───────────────────────────────────────────────────────── */
+      .text-muted { color: var(--text-muted); }
+      .text-secondary { color: var(--text-secondary); }
+      .font-mono { font-family: var(--font-mono); }
+      .flex { display: flex; }
+      .items-center { align-items: center; }
+      .gap-2 { gap: 0.5rem; }
+      .gap-3 { gap: 0.75rem; }
+      .mt-1 { margin-top: 0.25rem; }
+      .mt-2 { margin-top: 0.5rem; }
+      .mt-4 { margin-top: 1rem; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
     </style>
   </head>
   <body>
-    <nav class="navbar">
-      <div style="display: flex; gap: 2rem; align-items: center;">
-        <strong style="font-size: 1.1rem; color: white;">LXD Monitor</strong>
-        <a href="/">Dashboard</a>
-        <a href="/users" id="nav-users" style="display: none;">Manage Users</a>
+    <!-- Navigation bar -->
+    <nav class="navbar" role="navigation" aria-label="Main navigation">
+      <a href="/" class="navbar-brand">
+        <span class="brand-icon" aria-hidden="true">⬡</span>
+        LXD Monitor
+      </a>
+
+      <div class="navbar-nav" id="nav-links">
+        <a href="/" id="nav-dashboard">Dashboard</a>
+        <a href="/accounting" id="nav-accounting" style="display:none">Accounting</a>
+        <a href="/users"      id="nav-users"      style="display:none">Users</a>
       </div>
-      <div id="user-controls" style="display: none; align-items: center; gap: 1rem;">
-        <span id="user-email" style="font-size: 0.875rem; color: #e4e4e7;"></span>
-        <button class="logout" onclick="logout()">Logout</button>
+
+      <div class="navbar-right" id="nav-user-area" style="display:none">
+        <div class="user-badge">
+          <span id="nav-email" style="color:var(--text-primary)"></span>
+          <span id="nav-role-chip" class="role-chip"></span>
+        </div>
+        <button class="btn-logout" id="btn-logout" onclick="window.doLogout()">Sign out</button>
       </div>
     </nav>
-    <main class="container">
+
+    <main class="page-container">
       <slot />
     </main>
 
     <script>
-      // Client-side script to hydrate the navbar and handle role-based link visibility
-      const userStr = localStorage.getItem('user_data');
-      if (userStr) {
-        try {
-          const user = JSON.parse(userStr);
-          document.getElementById('user-controls').style.display = 'flex';
-          document.getElementById('user-email').innerText = `${user.email} (${user.role})`;
-          
-          if (user.role === 'admin') {
-            const navUsers = document.getElementById('nav-users');
-            if (navUsers) navUsers.style.display = 'block';
-          }
-        } catch (e) {
-          console.error("Failed to parse user data", e);
-        }
-      }
+      // Hydrate navbar from localStorage — runs on every page
+      (function () {
+        const raw = localStorage.getItem('user_data');
+        if (!raw) return;
 
-      window.logout = () => {
+        let user;
+        try { user = JSON.parse(raw); } catch { return; }
+
+        const area = document.getElementById('nav-user-area');
+        if (area) area.style.display = 'flex';
+
+        const emailEl = document.getElementById('nav-email');
+        if (emailEl) emailEl.textContent = user.email;
+
+        const chipEl = document.getElementById('nav-role-chip');
+        if (chipEl) {
+          chipEl.textContent = user.role;
+          chipEl.className   = `role-chip ${user.role}`;
+        }
+
+        if (user.role === 'admin') {
+          const adminLinks = ['nav-accounting', 'nav-users'];
+          adminLinks.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'flex';
+          });
+        }
+
+        // Mark active link
+        const links = document.querySelectorAll('.navbar-nav a');
+        links.forEach(a => {
+          if (a.getAttribute('href') === window.location.pathname) {
+            a.classList.add('active');
+          }
+        });
+      })();
+
+      window.doLogout = () => {
         localStorage.removeItem('session_token');
         localStorage.removeItem('user_data');
         window.location.href = '/login';

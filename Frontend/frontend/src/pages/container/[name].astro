@@ -1,0 +1,555 @@
+---
+// src/pages/container/[name].astro — Container detail page
+// The container name is always read from window.location on the client.
+// In static mode, we generate one placeholder page and the Astro dev server
+// serves it for any /container/* path. In production, nginx/caddy should
+// serve this file for any /container/ request.
+import Layout from '../../layouts/Layout.astro';
+
+export function getStaticPaths() {
+  // Astro requires this to pre-render. We return a single placeholder.
+  // All real routing is done client-side via window.location.pathname.
+  return [{ params: { name: '_' } }];
+}
+---
+
+<Layout title="Container">
+  <!-- Breadcrumb + header -->
+  <div style="margin-bottom:2rem;">
+    <a href="/" style="color:var(--accent);text-decoration:none;font-size:0.875rem;display:inline-flex;align-items:center;gap:0.35rem;">
+      ← Back to Dashboard
+    </a>
+
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:1rem;flex-wrap:wrap;gap:1rem;">
+      <div>
+        <h1 style="font-size:1.75rem;font-weight:700;letter-spacing:-0.02em;font-family:var(--font-mono);" id="page-title">
+          {name}
+        </h1>
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-top:0.4rem;" id="status-area">
+          <span class="badge badge-running" id="status-badge">Loading…</span>
+          <span class="text-muted font-mono" id="ipv4-display" style="font-size:0.8125rem;"></span>
+        </div>
+      </div>
+
+      <!-- Admin action buttons -->
+      <div id="admin-actions" style="display:none; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+        <button class="btn btn-success btn-sm" id="btn-start"    onclick="doAction('start')">▶ Start</button>
+        <button class="btn btn-ghost btn-sm"   id="btn-stop"     onclick="doAction('stop')">■ Stop</button>
+        <button class="btn btn-ghost btn-sm"   id="btn-restart"  onclick="doAction('restart')">↺ Restart</button>
+        <button class="btn btn-amber btn-sm"   id="btn-freeze"   onclick="doAction('freeze')">❄ Freeze</button>
+        <button class="btn btn-success btn-sm" id="btn-unfreeze" onclick="doAction('unfreeze')" style="display:none;">▶ Unfreeze</button>
+        <button class="btn btn-ghost btn-sm"   onclick="toggleLimitsPanel()">✎ Edit Limits</button>
+        <button class="btn btn-danger btn-sm"  onclick="openDeleteModal()">✕ Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live metrics summary row -->
+  <div id="metrics-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin-bottom:1.75rem;">
+  </div>
+
+  <!-- Edit limits panel (admin only, hidden by default) -->
+  <div id="limits-panel" class="card" style="display:none; margin-bottom:1.75rem;">
+    <h3 style="font-size:1rem; font-weight:600; margin-bottom:1.25rem;">Update Resource Limits</h3>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; max-width:500px;">
+      <div class="form-group">
+        <label class="form-label" for="edit-cpu">CPU Cores</label>
+        <input class="form-control" type="number" id="edit-cpu" min="1" max="64" placeholder="e.g. 2" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="edit-ram">RAM (MB)</label>
+        <input class="form-control" type="number" id="edit-ram" min="256" step="256" placeholder="e.g. 1024" />
+      </div>
+    </div>
+    <div style="display:flex;gap:0.75rem;margin-top:1.25rem;">
+      <button class="btn btn-primary" onclick="applyLimits()">Apply Live</button>
+      <button class="btn btn-ghost"   onclick="toggleLimitsPanel()">Cancel</button>
+    </div>
+    <div id="limits-msg" style="margin-top:0.75rem;font-size:0.875rem;"></div>
+  </div>
+
+  <!-- Charts -->
+  <div class="card" style="margin-bottom:1.75rem;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:0.75rem;">
+      <h2 style="font-size:1.1rem; font-weight:600;">Resource History</h2>
+      <div style="display:flex; gap:0.4rem;">
+        <button class="btn btn-ghost btn-sm chart-range-btn active-range" data-hours="1"  onclick="setRange(1)">1h</button>
+        <button class="btn btn-ghost btn-sm chart-range-btn"              data-hours="6"  onclick="setRange(6)">6h</button>
+        <button class="btn btn-ghost btn-sm chart-range-btn"              data-hours="24" onclick="setRange(24)">24h</button>
+        <button class="btn btn-ghost btn-sm chart-range-btn"              data-hours="168" onclick="setRange(168)">7d</button>
+      </div>
+    </div>
+
+    <div id="charts-loading" class="text-muted" style="font-size:0.875rem;padding:1rem 0;">Loading metrics…</div>
+    <div id="charts-area" style="display:none;">
+      <div style="margin-bottom:1.5rem;">
+        <p class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">CPU (nanoseconds cumulative)</p>
+        <div id="chart-cpu" style="height:120px;"></div>
+      </div>
+      <div style="margin-bottom:1.5rem;">
+        <p class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">RAM Used (bytes)</p>
+        <div id="chart-ram" style="height:120px;"></div>
+      </div>
+      <div>
+        <p class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">Network RX / TX (bytes)</p>
+        <div id="chart-net" style="height:120px;"></div>
+      </div>
+    </div>
+    <div id="charts-empty" style="display:none;" class="alert alert-info">
+      No historical data yet. The collector stores a point every 10 seconds once the container is running.
+    </div>
+  </div>
+
+  <!-- Quota banner for regular users -->
+  <div id="quota-banner" class="card" style="display:none; margin-bottom:1.75rem;">
+    <h3 style="font-size:1rem; font-weight:600; margin-bottom:1rem;">Your Resource Quota</h3>
+    <div id="quota-content"></div>
+  </div>
+
+  <!-- Terminal -->
+  <div class="card" style="background:var(--bg-base); border-color:rgba(255,255,255,0.05);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <h2 style="font-size:1.1rem;font-weight:600;">Terminal</h2>
+      <span id="term-status" class="badge badge-running" style="display:none;"></span>
+    </div>
+    <p class="text-muted" style="font-size:0.8125rem;margin-bottom:1rem;">
+      Commands run inside the container's namespace via <code style="color:var(--accent)">lxc exec</code>. Shell operators like <code style="color:var(--accent)">&amp;&amp;</code>, <code style="color:var(--accent)">|</code> are treated as literal strings, not interpreted.
+    </p>
+    <div id="terminal-container" style="height:380px;border:1px solid rgba(255,255,255,0.07);border-radius:var(--radius-md);overflow:hidden;"></div>
+  </div>
+
+  <!-- Delete modal -->
+  <div class="modal-overlay" id="delete-modal" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h3 style="margin-bottom:0.75rem;font-size:1.1rem;color:var(--red);">Delete Container</h3>
+      <p class="text-secondary" style="font-size:0.9rem;margin-bottom:1.5rem;">
+        Permanently destroy <strong style="color:var(--text-primary);font-family:var(--font-mono);" id="modal-container-name"></strong>?
+        All container data will be lost. This cannot be undone.
+      </p>
+      <div style="display:flex;gap:0.75rem;justify-content:flex-end;">
+        <button class="btn btn-ghost" onclick="closeDeleteModal()">Cancel</button>
+        <button class="btn btn-danger" id="modal-delete-btn" onclick="confirmDelete()">Delete permanently</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- uPlot (lightweight charting — ~40 KB, no dependencies) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
+
+  <!-- Xterm.js -->
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+
+  <style>
+    .active-range {
+      background: var(--bg-elevated) !important;
+      border-color: var(--accent) !important;
+      color: var(--accent) !important;
+    }
+    .uplot { width: 100% !important; }
+    .u-wrap { width: 100% !important; }
+    .metric-stat {
+      background: var(--bg-elevated);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem 1rem;
+    }
+    .metric-stat-label { font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:0.2rem; }
+    .metric-stat-value { font-size:1.05rem;font-weight:600;font-family:var(--font-mono); }
+  </style>
+
+  <script>
+    // Extract container name from URL path: /container/<name>
+    const containerName = window.location.pathname.split('/').filter(Boolean).pop() || '';
+    if (!containerName) window.location.href = '/';
+    import { api } from '../../lib/api.js';
+
+    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+    const isAdmin  = userData.role === 'admin';
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    function fmtBytes(b, d=1) {
+      if (!b || b === 0) return '0 B';
+      const k=1024, s=['B','KB','MB','GB','TB'];
+      const i=Math.floor(Math.log(b)/Math.log(k));
+      return `${(b/Math.pow(k,i)).toFixed(d)} ${s[i]}`;
+    }
+
+    function statusBadgeClass(s) {
+      const m = { Running:'badge-running', Stopped:'badge-stopped', Frozen:'badge-frozen', Error:'badge-error' };
+      return m[s] || 'badge-error';
+    }
+
+    // ── Admin controls ────────────────────────────────────────────────────────
+    if (isAdmin) {
+      document.getElementById('admin-actions').style.display = 'flex';
+    }
+
+    let currentStatus = '';
+    function syncActionButtons(status) {
+      currentStatus = status;
+      const isRunning = status === 'Running';
+      const isStopped = status === 'Stopped';
+      const isFrozen  = status === 'Frozen';
+      document.getElementById('btn-start').style.display    = isStopped ? 'flex' : 'none';
+      document.getElementById('btn-stop').style.display     = isRunning  ? 'flex' : 'none';
+      document.getElementById('btn-restart').style.display  = isRunning  ? 'flex' : 'none';
+      document.getElementById('btn-freeze').style.display   = isRunning  ? 'flex' : 'none';
+      document.getElementById('btn-unfreeze').style.display = isFrozen   ? 'flex' : 'none';
+    }
+
+    window.doAction = async (action) => {
+      const btns = document.getElementById('admin-actions');
+      btns.style.opacity = '0.4';
+      const res = await api.post(`/containers/${containerName}/action`, { action });
+      btns.style.opacity = '1';
+      if (res && res.ok) {
+        await refreshLiveMetrics();
+      } else if (res) {
+        const d = await res.json();
+        alert(`Action failed: ${d.description || 'Unknown error'}`);
+      }
+    };
+
+    window.toggleLimitsPanel = () => {
+      const p = document.getElementById('limits-panel');
+      p.style.display = p.style.display === 'none' ? 'block' : 'none';
+    };
+
+    window.applyLimits = async () => {
+      const cpu = document.getElementById('edit-cpu').value;
+      const ram = document.getElementById('edit-ram').value;
+      const msg = document.getElementById('limits-msg');
+      if (!cpu && !ram) { msg.textContent='Enter at least one value.'; msg.style.color='var(--red)'; return; }
+
+      const body = {};
+      if (cpu) body.cpu_cores = parseInt(cpu);
+      if (ram) body.ram_mb    = parseInt(ram);
+
+      const res = await api.patch(`/containers/${containerName}/limits`, body);
+      if (res && res.ok) {
+        msg.textContent  = 'Limits applied successfully.';
+        msg.style.color  = 'var(--green)';
+        setTimeout(() => { msg.textContent=''; document.getElementById('limits-panel').style.display='none'; }, 2000);
+      } else if (res) {
+        const d = await res.json();
+        msg.textContent = d.description || 'Failed to apply limits.';
+        msg.style.color = 'var(--red)';
+      }
+    };
+
+    // ── Delete modal ──────────────────────────────────────────────────────────
+    window.openDeleteModal = () => {
+      document.getElementById('modal-container-name').textContent = containerName;
+      document.getElementById('delete-modal').classList.add('open');
+    };
+    window.closeDeleteModal = () => {
+      document.getElementById('delete-modal').classList.remove('open');
+    };
+    window.confirmDelete = async () => {
+      const btn = document.getElementById('modal-delete-btn');
+      btn.disabled    = true;
+      btn.textContent = 'Deleting…';
+      const res = await api.post(`/containers/${containerName}/action`, { action: 'delete' });
+      if (res && res.ok) {
+        window.location.href = '/';
+      } else {
+        btn.disabled    = false;
+        btn.textContent = 'Delete permanently';
+        closeDeleteModal();
+        if (res) { const d = await res.json(); alert(d.description || 'Delete failed.'); }
+      }
+    };
+    document.getElementById('delete-modal').addEventListener('click', e => {
+      if (e.target === e.currentTarget) closeDeleteModal();
+    });
+
+    // ── Live metrics summary ──────────────────────────────────────────────────
+    async function refreshLiveMetrics() {
+      const res = await api.get(`/containers/${containerName}`);
+      if (!res || !res.ok) return;
+      const c = await res.json();
+
+      // Status badge
+      const badge = document.getElementById('status-badge');
+      badge.textContent = c.status;
+      badge.className   = `badge ${statusBadgeClass(c.status)}`;
+
+      // IPv4
+      const ipEl = document.getElementById('ipv4-display');
+      if (ipEl && c.config) {
+        const ifaces = c.expanded_config || {};
+      }
+
+      if (isAdmin) syncActionButtons(c.status);
+
+      // Summary row
+      document.getElementById('metrics-summary').innerHTML = `
+        <div class="metric-stat">
+          <div class="metric-stat-label">Status</div>
+          <div class="metric-stat-value"><span class="badge ${statusBadgeClass(c.status)}">${c.status}</span></div>
+        </div>
+        <div class="metric-stat">
+          <div class="metric-stat-label">Ephemeral</div>
+          <div class="metric-stat-value">${c.ephemeral ? 'Yes' : 'No'}</div>
+        </div>
+        <div class="metric-stat">
+          <div class="metric-stat-label">Architecture</div>
+          <div class="metric-stat-value">${c.architecture || '—'}</div>
+        </div>
+        <div class="metric-stat">
+          <div class="metric-stat-label">CPU Limit</div>
+          <div class="metric-stat-value">${c.config?.['limits.cpu'] || 'unrestricted'}</div>
+        </div>
+        <div class="metric-stat">
+          <div class="metric-stat-label">RAM Limit</div>
+          <div class="metric-stat-value">${c.config?.['limits.memory'] || 'unrestricted'}</div>
+        </div>
+        <div class="metric-stat">
+          <div class="metric-stat-label">Profiles</div>
+          <div class="metric-stat-value">${(c.profiles || []).join(', ')}</div>
+        </div>
+      `;
+
+      // Pre-fill edit limits form
+      if (c.config) {
+        const cpuVal = c.config['limits.cpu'];
+        const ramVal = c.config['limits.memory'];
+        if (cpuVal) document.getElementById('edit-cpu').value = cpuVal;
+        if (ramVal) document.getElementById('edit-ram').value = parseInt(ramVal);
+      }
+    }
+
+    refreshLiveMetrics();
+    setInterval(refreshLiveMetrics, 10000);
+
+    // ── Charts ────────────────────────────────────────────────────────────────
+    let charts = [];
+    let currentHours = 1;
+
+    const uPlotOpts = (title, yFmt) => ({
+      width:  document.querySelector('.page-container').clientWidth - 100,
+      height: 120,
+      cursor: { show: true },
+      legend: { show: false },
+      axes: [
+        {
+          stroke: '#505670',
+          grid:   { stroke: 'rgba(255,255,255,0.04)' },
+          ticks:  { stroke: 'rgba(255,255,255,0.04)' },
+          values: (u, vals) => vals.map(v => {
+            const d = new Date(v * 1000);
+            return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+          }),
+        },
+        {
+          stroke: '#505670',
+          grid:   { stroke: 'rgba(255,255,255,0.04)' },
+          ticks:  { stroke: 'rgba(255,255,255,0.04)' },
+          values: (u, vals) => vals.map(v => v == null ? '' : yFmt(v)),
+          size:   80,
+        },
+      ],
+      series: [
+        {},
+        {
+          stroke: '#6366f1',
+          fill:   'rgba(99,102,241,0.08)',
+          width:  1.5,
+          points: { show: false },
+        },
+      ],
+    });
+
+    function destroyCharts() {
+      charts.forEach(c => c.destroy());
+      charts = [];
+    }
+
+    async function loadCharts(hours) {
+      currentHours = hours;
+      document.getElementById('charts-loading').style.display = 'block';
+      document.getElementById('charts-area').style.display    = 'none';
+      document.getElementById('charts-empty').style.display   = 'none';
+
+      document.querySelectorAll('.chart-range-btn').forEach(b => {
+        b.classList.toggle('active-range', parseInt(b.dataset.hours) === hours);
+      });
+
+      const res = await api.get(`/containers/${containerName}/metrics?hours=${hours}`);
+      document.getElementById('charts-loading').style.display = 'none';
+
+      if (!res || !res.ok) { document.getElementById('charts-empty').style.display='block'; return; }
+      const data = await res.json();
+      if (!data.length)    { document.getElementById('charts-empty').style.display='block'; return; }
+
+      destroyCharts();
+      document.getElementById('charts-area').style.display = 'block';
+
+      const times     = data.map(p => new Date(p.time).getTime() / 1000);
+      const cpuVals   = data.map(p => p.cpu_ns   || 0);
+      const ramVals   = data.map(p => p.ram_bytes || 0);
+      const netRxVals = data.map(p => p.net_rx    || 0);
+      const netTxVals = data.map(p => p.net_tx    || 0);
+
+      const w = document.getElementById('chart-cpu').clientWidth || 600;
+
+      const cpuOpts = { ...uPlotOpts('CPU', v => (v/1e9).toFixed(1)+'s'), width: w };
+      charts.push(new uPlot(cpuOpts, [times, cpuVals], document.getElementById('chart-cpu')));
+
+      const ramOpts = { ...uPlotOpts('RAM', v => fmtBytes(v)), width: w };
+      charts.push(new uPlot(ramOpts, [times, ramVals], document.getElementById('chart-ram')));
+
+      // Network chart has two series
+      const netOpts = {
+        ...uPlotOpts('Net', v => fmtBytes(v)),
+        width: w,
+        legend: { show: true },
+        series: [
+          {},
+          { label:'RX', stroke:'#22c55e', fill:'rgba(34,197,94,0.06)',  width:1.5, points:{show:false} },
+          { label:'TX', stroke:'#f59e0b', fill:'rgba(245,158,11,0.06)', width:1.5, points:{show:false} },
+        ],
+      };
+      charts.push(new uPlot(netOpts, [times, netRxVals, netTxVals], document.getElementById('chart-net')));
+    }
+
+    window.setRange = (h) => loadCharts(h);
+    loadCharts(1);
+
+    // ── Quota banner (non-admin users) ────────────────────────────────────────
+    if (!isAdmin && userData.id) {
+      const qRes = await api.get(`/users/${userData.id}/quota`);
+      if (qRes && qRes.ok) {
+        const q = await qRes.json();
+        const banner = document.getElementById('quota-banner');
+        banner.style.display = 'block';
+        const cpuPct  = q.max_cpu_cores > 0 ? Math.round(q.used_cpu_cores / q.max_cpu_cores * 100) : 0;
+        const ramPct  = q.max_ram_mb > 0    ? Math.round(q.used_ram_mb    / q.max_ram_mb    * 100) : 0;
+        document.getElementById('quota-content').innerHTML = `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;max-width:500px;">
+            <div>
+              <div class="metric-stat-label" style="margin-bottom:0.35rem;">CPU: ${q.used_cpu_cores}/${q.max_cpu_cores} cores</div>
+              <div class="stat-bar"><div class="stat-bar-fill" style="width:${cpuPct}%;background:${cpuPct>85?'var(--red)':'var(--accent)'}"></div></div>
+            </div>
+            <div>
+              <div class="metric-stat-label" style="margin-bottom:0.35rem;">RAM: ${q.used_ram_mb}/${q.max_ram_mb} MB</div>
+              <div class="stat-bar"><div class="stat-bar-fill" style="width:${ramPct}%;background:${ramPct>85?'var(--red)':'var(--accent)'}"></div></div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    // ── Xterm.js terminal ─────────────────────────────────────────────────────
+    // Wait for Xterm to load from CDN before initialising
+    function initTerminal() {
+      if (typeof Terminal === 'undefined') {
+        setTimeout(initTerminal, 100);
+        return;
+      }
+
+      const fitAddon = new FitAddon.FitAddon();
+      const term = new Terminal({
+        cursorBlink:  true,
+        fontFamily:   'JetBrains Mono, Fira Code, monospace',
+        fontSize:     13,
+        lineHeight:   1.4,
+        theme: {
+          background: '#0a0b0f',
+          foreground: '#f0f2f8',
+          cursor:     '#6366f1',
+          selection:  'rgba(99,102,241,0.3)',
+          black:      '#18191f',
+          red:        '#ef4444',
+          green:      '#22c55e',
+          yellow:     '#f59e0b',
+          blue:       '#3b82f6',
+          magenta:    '#a855f7',
+          cyan:       '#06b6d4',
+          white:      '#f0f2f8',
+        },
+      });
+
+      term.loadAddon(fitAddon);
+      term.open(document.getElementById('terminal-container'));
+      fitAddon.fit();
+
+      term.writeln('\x1b[1;35m╔══════════════════════════════════════╗\x1b[0m');
+      term.writeln(`\x1b[1;35m║\x1b[0m  LXD Monitor — Container Terminal    \x1b[1;35m║\x1b[0m`);
+      term.writeln('\x1b[1;35m╚══════════════════════════════════════╝\x1b[0m');
+      term.writeln(`\x1b[90mConnected to \x1b[0m\x1b[1;36m${containerName}\x1b[0m`);
+      term.writeln('\x1b[90mType a command and press Enter.\x1b[0m\r\n');
+
+      const prompt = `\x1b[1;32m${containerName}\x1b[0m\x1b[90m$\x1b[0m `;
+      term.write(prompt);
+
+      let currentLine = '';
+
+      term.onData(async (data) => {
+        switch (data) {
+          case '\r': {                          // Enter
+            term.writeln('');
+            const cmd = currentLine.trim();
+            currentLine = '';
+            if (cmd) await runCommand(cmd, term, containerName, prompt);
+            else      term.write(prompt);
+            break;
+          }
+          case '\u007F': {                      // Backspace
+            if (currentLine.length > 0) {
+              term.write('\b \b');
+              currentLine = currentLine.slice(0, -1);
+            }
+            break;
+          }
+          case '\u0003': {                      // Ctrl-C
+            term.writeln('^C');
+            currentLine = '';
+            term.write(prompt);
+            break;
+          }
+          default: {
+            if (data >= ' ' || data === '\t') { // printable
+              term.write(data);
+              currentLine += data;
+            }
+          }
+        }
+      });
+
+      window.addEventListener('resize', () => fitAddon.fit());
+    }
+
+    async function runCommand(cmd, term, containerName, prompt) {
+      term.write('\x1b[90m');  // dim while waiting
+      const res = await api.post(`/containers/${containerName}/exec`, { command: cmd });
+      term.write('\x1b[0m');   // reset
+
+      if (!res) { term.write(prompt); return; }
+
+      if (res.ok) {
+        const result = await res.json();
+        if (result.stdout) {
+          term.write(result.stdout.replace(/\n/g, '\r\n'));
+          if (!result.stdout.endsWith('\n')) term.writeln('');
+        }
+        if (result.stderr) {
+          term.write(`\x1b[31m${result.stderr.replace(/\n/g, '\r\n')}\x1b[0m`);
+          if (!result.stderr.endsWith('\n')) term.writeln('');
+        }
+        if (!result.stdout && !result.stderr && result.exit_code !== 0) {
+          term.writeln(`\x1b[90m[exited: ${result.exit_code}]\x1b[0m`);
+        }
+      } else {
+        const err = await res.json().catch(() => ({}));
+        term.writeln(`\x1b[31mError: ${err.description || res.statusText}\x1b[0m`);
+      }
+
+      term.write(prompt);
+    }
+
+    initTerminal();
+  </script>
+</Layout>

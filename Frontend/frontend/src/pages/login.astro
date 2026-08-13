@@ -1,99 +1,263 @@
 ---
 // src/pages/login.astro
+const GOOGLE_CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? 'YOUR_GOOGLE_CLIENT_ID';
 ---
+
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login | LXD Monitor</title>
-  
-  {/* Reason: Official Google Identity Services library required for OAuth */}
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-  
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Sign in to LXD Monitor — Self-hosted container management dashboard" />
+  <title>Sign In | LXD Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://accounts.google.com/gsi/client?hl=en" async defer></script>
+
   <style>
-    body { 
-      display: flex; 
-      justify-content: center; 
-      align-items: center; 
-      height: 100vh; 
-      background: #f4f4f5; 
-      font-family: system-ui, sans-serif; 
-      margin: 0;
+    :root {
+      --accent:      #6366f1;
+      --accent-glow: rgba(99,102,241,0.35);
+      --purple:      #a855f7;
     }
-    .login-box { 
-      background: white; 
-      padding: 3rem 2rem; 
-      border-radius: 8px; 
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
-      text-align: center;
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #0a0b0f;
+      color: #f0f2f8;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Animated mesh gradient background */
+    .bg-gradient {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 80% at 10% 10%,  rgba(99,102,241,0.15) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 60% at 90% 90%,  rgba(168,85,247,0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 100% 60% at 50% 100%,rgba(59,130,246,0.08) 0%, transparent 50%),
+        #0a0b0f;
+    }
+
+    /* Floating orbs */
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.15;
+      z-index: 0;
+      animation: float 12s ease-in-out infinite;
+    }
+    .orb-1 { width: 400px; height: 400px; background: var(--accent); top: -10%;  left: -10%; animation-delay: 0s; }
+    .orb-2 { width: 300px; height: 300px; background: var(--purple); bottom: -5%; right: -5%; animation-delay: -6s; }
+
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      50%       { transform: translate(20px, -20px) scale(1.05); }
+    }
+
+    .login-wrapper {
+      position: relative;
+      z-index: 1;
       width: 100%;
-      max-width: 400px;
+      max-width: 420px;
+      padding: 1rem;
     }
-    h2 { margin-top: 0; color: #18181b; }
-    p { color: #71717a; margin-bottom: 2rem; }
+
+    .login-card {
+      background: rgba(17,19,24,0.85);
+      backdrop-filter: blur(32px) saturate(150%);
+      -webkit-backdrop-filter: blur(32px) saturate(150%);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 20px;
+      padding: 3rem 2.5rem;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.04),
+        0 20px 60px rgba(0,0,0,0.6),
+        0 0 80px var(--accent-glow);
+      animation: card-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes card-in {
+      from { opacity: 0; transform: translateY(20px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0)    scale(1);    }
+    }
+
+    .login-logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 2rem;
+    }
+
+    .logo-icon {
+      width: 52px;
+      height: 52px;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      box-shadow: 0 0 30px var(--accent-glow), 0 4px 20px rgba(0,0,0,0.4);
+    }
+
+    h1 {
+      font-size: 1.625rem;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, #f0f2f8, #a5b4fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #8b95b0;
+      font-size: 0.9rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      color: #505670;
+      font-size: 0.8125rem;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: rgba(255,255,255,0.07);
+    }
+
+    /* Override Google button to center it */
+    .g_id_signin {
+      display: flex !important;
+      justify-content: center !important;
+    }
+
+    .error-box {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-left: 3px solid #ef4444;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.875rem;
+      color: #f87171;
+      margin-top: 1.5rem;
+      display: none;
+      animation: shake 0.3s ease;
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25%  { transform: translateX(-5px); }
+      75%  { transform: translateX(5px); }
+    }
+
+    .footer-note {
+      text-align: center;
+      margin-top: 2rem;
+      font-size: 0.8rem;
+      color: #505670;
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
-  <div class="login-box">
-    <h2>LXD Server Monitor</h2>
-    <p>Sign in to manage your containers</p>
-    
-    <!-- Google Identity Services Configuration -->
-    <div id="g_id_onload"
-         data-client_id="YOUR_GOOGLE_CLIENT_ID_HERE"
-         data-context="signin"
-         data-ux_mode="popup"
-         data-callback="handleCredentialResponse"
-         data-auto_prompt="false">
+  <div class="bg-gradient"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+
+  <div class="login-wrapper">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="logo-icon" aria-hidden="true">⬡</div>
+      </div>
+
+      <h1>LXD Monitor</h1>
+      <p class="subtitle">Sign in to manage your containers</p>
+
+      <div class="divider">Continue with Google</div>
+
+      <!-- Google Identity Services -->
+      <div
+        id="g_id_onload"
+        data-client_id={GOOGLE_CLIENT_ID}
+        data-context="signin"
+        data-ux_mode="popup"
+        data-callback="handleCredentialResponse"
+        data-auto_prompt="false"
+        data-locale="en"
+      ></div>
+
+      <div
+        class="g_id_signin"
+        data-type="standard"
+        data-shape="pill"
+        data-theme="filled_black"
+        data-text="signin_with"
+        data-size="large"
+        data-logo_alignment="left"
+        data-width="340"
+      ></div>
+
+      <div id="error-box" class="error-box" role="alert"></div>
+
+      <p class="footer-note">
+        Access is by invitation only.<br />
+        Contact your administrator if you need access.
+      </p>
     </div>
-    
-    <!-- Renders the actual Google button -->
-    <div class="g_id_signin"
-         data-type="standard"
-         data-shape="rectangular"
-         data-theme="outline"
-         data-text="sign_in_with"
-         data-size="large"
-         data-logo_alignment="left"
-         style="display: flex; justify-content: center;">
-    </div>
-    
-    <div id="error-msg" style="color: #dc2626; margin-top: 1rem; display: none; font-size: 0.875rem;"></div>
   </div>
 
   <script>
-    // This callback is triggered automatically by Google upon successful login
+    // Redirect already-logged-in users
+    if (localStorage.getItem('session_token')) {
+      window.location.href = '/';
+    }
+
+    const API_BASE = 'http://localhost:8000/api';
+
     window.handleCredentialResponse = async (response) => {
-      const errorDiv = document.getElementById('error-msg');
-      errorDiv.style.display = 'none';
+      const errorBox = document.getElementById('error-box');
+      errorBox.style.display = 'none';
 
       try {
-        const res = await fetch('http://127.0.0.1:8000/api/auth/login', {
+        const res = await fetch(`${API_BASE}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          // Send the Google JWT to our Falcon backend for verification
-          body: JSON.stringify({ google_token: response.credential })
+          body: JSON.stringify({ google_token: response.credential }),
         });
 
         const data = await res.json();
 
         if (res.ok) {
-          // Store our local stateless session token
           localStorage.setItem('session_token', data.token);
-          localStorage.setItem('user_data', JSON.stringify(data.user));
-          
-          // Redirect to the dashboard
+          localStorage.setItem('user_data',     JSON.stringify(data.user));
           window.location.href = '/';
         } else {
-          // E.g., User is not in the database and not the bootstrap admin
-          errorDiv.innerText = data.description || "Access Denied.";
-          errorDiv.style.display = "block";
+          errorBox.textContent  = data.description || 'Access denied. You must be invited by an administrator.';
+          errorBox.style.display = 'block';
         }
       } catch (err) {
-        console.error("Login error:", err);
-        errorDiv.innerText = "Network error connecting to the server.";
-        errorDiv.style.display = "block";
+        console.error('Login error:', err);
+        errorBox.textContent  = 'Network error — could not reach the server.';
+        errorBox.style.display = 'block';
       }
     };
   </script>
