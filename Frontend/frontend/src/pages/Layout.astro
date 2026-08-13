@@ -1,0 +1,23 @@
+<!-- Inside src/layouts/Layout.astro, update your navbar -->
+<nav class="navbar">
+  <div style="display: flex; gap: 2rem; align-items: center;">
+    <strong>LXD Monitor</strong>
+    <a href="/" style="color: #a1a1aa; text-decoration: none;">Dashboard</a>
+    <!-- Only visible to admins via JS -->
+    <a href="/users" id="nav-users" style="color: #a1a1aa; text-decoration: none; display: none;">Manage Users</a>
+  </div>
+  <div id="user-controls" style="display: none;">
+    <span id="user-email" style="margin-right: 1rem;"></span>
+    <button class="logout" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<script>
+  // Expose admin links
+  const navUser = JSON.parse(localStorage.getItem('user_data') || '{}');
+  if (navUser.role === 'admin') {
+    const navUsersLink = document.getElementById('nav-users');
+    if (navUsersLink) navUsersLink.style.display = 'block';
+  }
+  // ... rest of existing script
+</script>

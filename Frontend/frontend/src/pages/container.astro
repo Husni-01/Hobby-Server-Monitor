@@ -1,0 +1,86 @@
+<!-- Add Xterm.js CSS to the top of the file alongside uPlot -->
+  <link rel="stylesheet" href="https://unpkg.com/xterm/css/xterm.css" />
+  <script src="https://unpkg.com/xterm/lib/xterm.js" is:inline></script>
+
+  <!-- Replace the previous Terminal Section Placeholder -->
+  <div style="background: #18181b; padding: 1.5rem; border-radius: 8px; margin-top: 2rem;">
+    <h3 style="margin-top: 0; color: white;">Terminal Access</h3>
+    <!-- The container where Xterm will render -->
+    <div id="terminal-container" style="height: 350px; width: 100%; border: 1px solid #3f3f46;"></div>
+  </div>
+
+  <script>
+    import { fetchWithAuth } from '../lib/api.js';
+
+    // ... existing uPlot code ...
+
+    // Initialize Xterm.js
+    const term = new Terminal({
+      cursorBlink: true,
+      theme: { background: '#18181b' },
+      fontFamily: 'monospace'
+    });
+    
+    term.open(document.getElementById('terminal-container'));
+    term.writeln(`Welcome to ${containerName} console.`);
+    term.writeln('Type a command and press Enter. (e.g., ls -la, pwd, whoami)\r\n');
+    
+    const prompt = `\x1b[1;32m${containerName}\x1b[0m$ `;
+    term.write(prompt);
+
+    let currentInput = '';
+
+    // Handle user keystrokes
+    term.onData(async e => {
+      switch (e) {
+        case '\r': // Enter
+          term.writeln(''); // Move to next line
+          if (currentInput.trim() !== '') {
+            await executeCommand(currentInput.trim());
+          }
+          currentInput = '';
+          term.write(prompt);
+          break;
+        case '\u007F': // Backspace
+          if (currentInput.length > 0) {
+            term.write('\b \b');
+            currentInput = currentInput.slice(0, -1);
+          }
+          break;
+        default: // Normal characters
+          // Print the character so the user can see what they are typing
+          term.write(e);
+          currentInput += e;
+      }
+    });
+
+    async function executeCommand(command) {
+      term.writeln(`\x1b[36mExecuting: ${command}\x1b[0m`);
+      
+      const res = await fetchWithAuth(`/containers/${containerName}/exec`, {
+        method: 'POST',
+        body: JSON.stringify({ command })
+      });
+
+      if (!res) return;
+
+      const result = await res.json();
+
+      if (res.ok) {
+        // Format stdout and stderr correctly for Xterm (handling newlines)
+        if (result.stdout) {
+          const formattedOut = result.stdout.replace(/\n/g, '\r\n');
+          term.write(formattedOut);
+        }
+        if (result.stderr) {
+          const formattedErr = `\x1b[31m${result.stderr.replace(/\n/g, '\r\n')}\x1b[0m`;
+          term.write(formattedErr);
+        }
+        if (!result.stdout && !result.stderr) {
+           term.writeln(`[Process exited with code ${result.exit_code}]`);
+        }
+      } else {
+        term.writeln(`\x1b[31mError: ${result.description}\x1b[0m`);
+      }
+    }
+  </script>

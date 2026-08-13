@@ -1,0 +1,61 @@
+---
+// src/pages/index.astro
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Dashboard">
+  <header style="display: flex; justify-content: space-between; align-items: center;">
+    <h1>Your Containers</h1>
+    <!-- Only visible if admin, logic handled in JS below -->
+    <button id="btn-create" style="display: none; padding: 0.5rem 1rem; background: #3b82f6; color: white; border: none;">+ New Container</button>
+  </header>
+
+  <div id="container-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; margin-top: 2rem;">
+    <p>Loading metrics...</p>
+  </div>
+
+  <script>
+    import { fetchWithAuth } from '../lib/api.js';
+
+    async function loadContainers() {
+      const res = await fetchWithAuth('/containers');
+      if (!res) return;
+
+      const containers = await res.json();
+      const grid = document.getElementById('container-grid');
+      
+      if (containers.length === 0) {
+        grid.innerHTML = '<p>No containers assigned to you.</p>';
+        return;
+      }
+
+      // Render the containers (Hydration)
+      grid.innerHTML = containers.map(c => `
+        <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <h3 style="margin-top: 0;">${c.name}</h3>
+          <span style="display: inline-block; padding: 0.25rem 0.5rem; background: ${c.status === 'Running' ? '#dcfce7' : '#fee2e2'}; color: ${c.status === 'Running' ? '#166534' : '#991b1b'}; border-radius: 999px; font-size: 0.875rem;">
+            ${c.status}
+          </span>
+          <div style="margin-top: 1rem; font-size: 0.875rem; color: #4b5563;">
+            <p><strong>IPv4:</strong> ${c.ipv4}</p>
+            <p><strong>OS:</strong> ${c.architecture}</p>
+          </div>
+          <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+            <a href="/container/${c.name}" style="text-decoration: none; color: #3b82f6; font-size: 0.875rem;">View Metrics & Terminal &rarr;</a>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // RBAC: Show create button only to admins
+    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+    if (userData.role === 'admin') {
+      document.getElementById('btn-create').style.display = 'block';
+    }
+
+    // Initial load and polling setup
+    loadContainers();
+    // Poll for status updates every 10 seconds to match the backend collector
+    setInterval(loadContainers, 10000);
+  </script>
+</Layout>

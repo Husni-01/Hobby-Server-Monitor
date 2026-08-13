@@ -1,0 +1,150 @@
+---
+// src/pages/users.astro
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Manage Users">
+  <header style="margin-bottom: 2rem;">
+    <h1>User Management & Quotas</h1>
+  </header>
+
+  <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 2rem;">
+    
+    <!-- Invite User Form -->
+    <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); height: fit-content;">
+      <h3 style="margin-top: 0;">Invite User</h3>
+      <form id="invite-form" style="display: flex; flex-direction: column; gap: 1rem;">
+        <div>
+          <label style="display: block; margin-bottom: 0.25rem;">Email Address</label>
+          <input type="email" id="email" required style="width: 100%; padding: 0.5rem; border: 1px solid #d4d4d8; border-radius: 4px;">
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 0.25rem;">Role</label>
+          <select id="role" style="width: 100%; padding: 0.5rem; border: 1px solid #d4d4d8; border-radius: 4px;">
+            <option value="user">Container User</option>
+            <option value="admin">Administrator</option>
+          </select>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 0.25rem;">Global CPU Quota (Cores)</label>
+          <input type="number" id="max_cpu" value="2" min="1" style="width: 100%; padding: 0.5rem; border: 1px solid #d4d4d8; border-radius: 4px;">
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 0.25rem;">Global RAM Quota (MB)</label>
+          <input type="number" id="max_ram" value="2048" min="512" step="512" style="width: 100%; padding: 0.5rem; border: 1px solid #d4d4d8; border-radius: 4px;">
+        </div>
+        
+        <div id="invite-msg" style="font-size: 0.875rem;"></div>
+        
+        <button type="submit" style="background: #10b981; color: white; padding: 0.75rem; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">
+          Send Invitation
+        </button>
+      </form>
+    </div>
+
+    <!-- User List -->
+    <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+      <h3 style="margin-top: 0;">Active Users</h3>
+      <div id="user-list" style="display: flex; flex-direction: column; gap: 1.5rem;">
+        <p>Loading users...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    import { fetchWithAuth } from '../lib/api.js';
+
+    // RBAC Check
+    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+    if (userData.role !== 'admin') {
+      window.location.href = '/';
+    }
+
+    async function loadUsers() {
+      const res = await fetchWithAuth('/users');
+      if (!res) return;
+      const users = await res.json();
+      
+      const list = document.getElementById('user-list');
+      list.innerHTML = users.map(u => `
+        <div style="border: 1px solid #e4e4e7; padding: 1rem; border-radius: 6px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e4e4e7; padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+            <strong>${u.email} <span style="background: #f4f4f5; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.75rem;">${u.role}</span></strong>
+            <span style="font-size: 0.875rem; color: #71717a;">Quota: ${u.max_cpu_cores} Cores / ${u.max_ram_mb} MB</span>
+          </div>
+          <div>
+            <p style="font-size: 0.875rem; font-weight: bold; margin-bottom: 0.5rem;">Assigned Containers:</p>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              ${u.containers.length ? u.containers.map(c => `
+                <span style="background: #dbeafe; color: #1e3a8a; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; display: flex; align-items: center; gap: 0.25rem;">
+                  ${c} <button onclick="revokeAccess(${u.id}, '${c}')" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 0; font-weight: bold;">&times;</button>
+                </span>
+              `).join('') : '<span style="font-size: 0.875rem; color: #a1a1aa;">None</span>'}
+            </div>
+            
+            <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+              <input type="text" id="assign-input-${u.id}" placeholder="container-name" style="padding: 0.25rem; font-size: 0.875rem; border: 1px solid #d4d4d8; border-radius: 4px;">
+              <button onclick="assignAccess(${u.id})" style="background: #3b82f6; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.875rem;">Assign</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Form Submission
+    document.getElementById('invite-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById('invite-msg');
+      
+      const payload = {
+        email: document.getElementById('email').value,
+        role: document.getElementById('role').value,
+        max_cpu_cores: document.getElementById('max_cpu').value,
+        max_ram_mb: document.getElementById('max_ram').value
+      };
+
+      const res = await fetchWithAuth('/users', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        msg.innerText = "User invited successfully.";
+        msg.style.color = "#10b981";
+        document.getElementById('invite-form').reset();
+        loadUsers();
+      } else {
+        const data = await res.json();
+        msg.innerText = data.description || "Failed to invite user.";
+        msg.style.color = "#dc2626";
+      }
+    });
+
+    // Global Functions for inline onclick handlers
+    window.assignAccess = async (userId) => {
+      const input = document.getElementById(`assign-input-${userId}`);
+      const containerId = input.value.trim();
+      if (!containerId) return;
+
+      const res = await fetchWithAuth(`/users/${userId}/containers`, {
+        method: 'POST',
+        body: JSON.stringify({ container_id: containerId })
+      });
+
+      if (res.ok) loadUsers();
+      else alert("Failed to assign container. Ensure the name is correct.");
+    };
+
+    window.revokeAccess = async (userId, containerId) => {
+      if (!confirm(`Revoke access to ${containerId}?`)) return;
+
+      const res = await fetchWithAuth(`/users/${userId}/containers/${containerId}`, {
+        method: 'DELETE'
+      });
+
+      if (res.ok) loadUsers();
+    };
+
+    loadUsers();
+  </script>
+</Layout>

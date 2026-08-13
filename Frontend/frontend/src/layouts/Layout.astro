@@ -1,0 +1,63 @@
+---
+// src/layouts/Layout.astro
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title} | LXD Monitor</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; background: #f4f4f5; color: #18181b; }
+      .navbar { background: #18181b; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+      .navbar a { color: #a1a1aa; text-decoration: none; font-size: 0.875rem; transition: color 0.2s; }
+      .navbar a:hover { color: white; }
+      .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+      button.logout { background: transparent; color: #f87171; border: 1px solid #f87171; padding: 0.25rem 0.75rem; border-radius: 4px; cursor: pointer; font-size: 0.875rem; }
+      button.logout:hover { background: #fee2e2; }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar">
+      <div style="display: flex; gap: 2rem; align-items: center;">
+        <strong style="font-size: 1.1rem; color: white;">LXD Monitor</strong>
+        <a href="/">Dashboard</a>
+        <a href="/users" id="nav-users" style="display: none;">Manage Users</a>
+      </div>
+      <div id="user-controls" style="display: none; align-items: center; gap: 1rem;">
+        <span id="user-email" style="font-size: 0.875rem; color: #e4e4e7;"></span>
+        <button class="logout" onclick="logout()">Logout</button>
+      </div>
+    </nav>
+    <main class="container">
+      <slot />
+    </main>
+
+    <script>
+      // Client-side script to hydrate the navbar and handle role-based link visibility
+      const userStr = localStorage.getItem('user_data');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          document.getElementById('user-controls').style.display = 'flex';
+          document.getElementById('user-email').innerText = `${user.email} (${user.role})`;
+          
+          if (user.role === 'admin') {
+            const navUsers = document.getElementById('nav-users');
+            if (navUsers) navUsers.style.display = 'block';
+          }
+        } catch (e) {
+          console.error("Failed to parse user data", e);
+        }
+      }
+
+      window.logout = () => {
+        localStorage.removeItem('session_token');
+        localStorage.removeItem('user_data');
+        window.location.href = '/login';
+      };
+    </script>
+  </body>
+</html>

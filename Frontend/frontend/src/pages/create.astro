@@ -1,0 +1,127 @@
+---
+// src/pages/create.astro
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Create Container">
+  <header style="margin-bottom: 2rem;">
+    <a href="/" style="text-decoration: none; color: #3b82f6;">&larr; Back to Dashboard</a>
+    <h1>Deploy New Container</h1>
+  </header>
+
+  <div style="background: white; padding: 2rem; border-radius: 8px; max-width: 600px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+    <form id="create-container-form" style="display: flex; flex-direction: column; gap: 1.5rem;">
+      
+      <!-- Name -->
+      <div>
+        <label for="name" style="display: block; font-weight: bold; margin-bottom: 0.5rem;">Container Name</label>
+        <input type="text" id="name" name="name" required pattern="[a-z0-9-]+" placeholder="e.g., web-server-01" style="width: 100%; padding: 0.5rem; border: 1px solid #d4d4d8; border-radius: 4px;" title="Lowercase alphanumeric and hyphens only">
+        <small style="color: #71717a;">Lowercase letters, numbers, and hyphens only.</small>
+      </div>
+
+      <!-- Image -->
+      <div>
+        <label for="image" style="display: block; font-weight: bold; margin-bottom: 0.5rem;">Base Image</label>
+        <select id="image" name="image" style="width: 100%; padding: 0.5rem; border: 1px solid #d4d4d8; border-radius: 4px;">
+          <option value="ubuntu/22.04">Ubuntu 22.04 LTS</option>
+          <option value="ubuntu/20.04">Ubuntu 20.04 LTS</option>
+          <option value="alpine/3.18">Alpine Linux 3.18</option>
+          <option value="debian/12">Debian 12</option>
+        </select>
+      </div>
+
+      <!-- CPU Limits -->
+      <div>
+        <label for="cpu_cores" style="display: block; font-weight: bold; margin-bottom: 0.5rem;">CPU Cores: <span id="cpu_val">1</span></label>
+        <input type="range" id="cpu_cores" name="cpu_cores" min="1" max="4" value="1" style="width: 100%;">
+      </div>
+
+      <!-- RAM Limits -->
+      <div>
+        <label for="ram_mb" style="display: block; font-weight: bold; margin-bottom: 0.5rem;">RAM: <span id="ram_val">512</span> MB</label>
+        <input type="range" id="ram_mb" name="ram_mb" min="256" max="8192" step="256" value="512" style="width: 100%;">
+      </div>
+
+      <!-- Toggles -->
+      <div style="display: flex; gap: 2rem;">
+        <label style="display: flex; align-items: center; gap: 0.5rem;">
+          <input type="checkbox" id="ephemeral" name="ephemeral">
+          Ephemeral (Destroy on stop)
+        </label>
+        
+        <label style="display: flex; align-items: center; gap: 0.5rem;">
+          <input type="checkbox" id="autostart" name="autostart" checked>
+          Start immediately
+        </label>
+      </div>
+
+      <div id="error-msg" style="color: #dc2626; display: none; font-size: 0.875rem;"></div>
+
+      <button type="submit" id="submit-btn" style="background: #3b82f6; color: white; padding: 0.75rem; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 1rem;">
+        Deploy Container
+      </button>
+    </form>
+  </div>
+
+  <script>
+    import { fetchWithAuth } from '../lib/api.js';
+
+    // RBAC Check: Kick non-admins out of this page immediately
+    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+    if (userData.role !== 'admin') {
+      window.location.href = '/';
+    }
+
+    // Dynamic Slider Value Updates
+    document.getElementById('cpu_cores').addEventListener('input', (e) => {
+      document.getElementById('cpu_val').innerText = e.target.value;
+    });
+    document.getElementById('ram_mb').addEventListener('input', (e) => {
+      document.getElementById('ram_val').innerText = e.target.value;
+    });
+
+    // Form Submission
+    document.getElementById('create-container-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const btn = document.getElementById('submit-btn');
+      const errorDiv = document.getElementById('error-msg');
+      
+      btn.disabled = true;
+      btn.innerText = 'Deploying (This may take a minute)...';
+      errorDiv.style.display = 'none';
+
+      const payload = {
+        name: document.getElementById('name').value,
+        image: document.getElementById('image').value,
+        limits: {
+          cpu_cores: parseInt(document.getElementById('cpu_cores').value),
+          ram_mb: parseInt(document.getElementById('ram_mb').value),
+          ephemeral: document.getElementById('ephemeral').checked,
+          autostart: document.getElementById('autostart').checked
+        }
+      };
+
+      try {
+        const res = await fetchWithAuth('/containers', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          window.location.href = '/'; // Go back to dashboard on success
+        } else {
+          const data = await res.json();
+          errorDiv.innerText = data.description || "Failed to create container.";
+          errorDiv.style.display = 'block';
+        }
+      } catch (err) {
+        errorDiv.innerText = "Network error while creating container.";
+        errorDiv.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Deploy Container';
+      }
+    });
+  </script>
+</Layout>
