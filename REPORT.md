@@ -105,11 +105,11 @@ These are features that were understood but not implemented within scope:
 ## Development Journey
 
 ### Time Spent
-*   **Backend & LXD Integration:** ~X hours
-*   **Frontend (Astro & UI):** ~X hours
-*   **Infrastructure & Background Collector:** ~X hours
-*   **Debugging & Documentation:** ~X hours
-*   **Total:** ~X hours
+*   **Backend & LXD Integration:** 4 hours
+*   **Frontend (Astro & UI):** ~3 hours
+*   **Infrastructure & Background Collector:** ~1 hours
+*   **Debugging & Documentation:** ~2 hours
+*   **Total:** ~10 hours
 
 ### Issues Encountered
 
