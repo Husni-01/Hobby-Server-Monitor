@@ -156,5 +156,7 @@ All code was reviewed, understood, and validated by the author before inclusion.
 To ensure operational readiness and a professional engineering standard, I implemented the following features beyond the baseline requirements:
 
 1. **Automated CI/CD Pipeline (GitHub Actions):** I created a `.github/workflows/ci.yml` file. On every commit, this spins up an Ubuntu runner, verifies the Node 22 Astro SSG build, and checks the Python backend for syntax errors. This ensures broken code is never merged.
+
 2. **Production Deployment Files (systemd):** I included a `deployment/` directory containing `lxd-monitor-api.service` and `lxd-monitor-collector.service`. These allow a server admin to easily install the backend and collector as background daemons that automatically survive server reboots.
+
 3. **Documented Threat Model:** I included a comprehensive threat model (detailed above) that breaks down the attack vectors of the LXD socket, terminal shell injection, and TSDB memory exhaustion, along with their respective mitigations.
