@@ -1,0 +1,14 @@
+[Unit]
+Description=LXD Monitor Metrics Collector
+After=network.target lxd.service
+
+[Service]
+User=root
+WorkingDirectory=/home/ubuntu/Hobby-Server-Monitor/Backend
+EnvironmentFile=/home/ubuntu/Hobby-Server-Monitor/Backend/.env
+ExecStart=/home/ubuntu/Hobby-Server-Monitor/Backend/venv/bin/python collector.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

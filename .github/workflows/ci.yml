@@ -1,0 +1,40 @@
+name: LXD Monitor CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - name: Install Astro Dependencies
+        working-directory: ./Frontend/frontend
+        run: npm install
+      - name: Build Astro SSG
+        working-directory: ./Frontend/frontend
+        run: npm run build
+
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install Python Dependencies
+        working-directory: ./Backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Syntax Check
+        working-directory: ./Backend
+        run: python -m py_compile *.py
