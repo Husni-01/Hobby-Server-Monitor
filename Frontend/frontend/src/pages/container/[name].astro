@@ -6,12 +6,13 @@
 // serve this file for any /container/ request.
 import Layout from '../../layouts/Layout.astro';
 
+const { name } = Astro.params;
+
 export function getStaticPaths() {
   // Astro requires this to pre-render. We return a single placeholder.
   // All real routing is done client-side via window.location.pathname.
   return [{ params: { name: '_' } }];
 }
----
 
 <Layout title="Container">
   <!-- Breadcrumb + header -->
