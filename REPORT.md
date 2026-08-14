@@ -102,13 +102,59 @@ These are features that were understood but not implemented within scope:
 
 ---
 
+## Development Journey
+
+### Time Spent
+*   **Backend & LXD Integration:** ~X hours
+*   **Frontend (Astro & UI):** ~X hours
+*   **Infrastructure & Background Collector:** ~X hours
+*   **Debugging & Documentation:** ~X hours
+*   **Total:** ~X hours
+
+### Issues Encountered
+
+*   **Google Sign-In Button Regional Override (Sinhala)**
+    *   *Problem:* Because I was developing from Sri Lanka, Google Identity Services auto-detected my region and rendered the sign-in button in Sinhala (as shown in "Screenshot 2026-08-14 001621.png"). I initially tried to fix this by adding a second script tag with the English parameter (`<script src="https://accounts.google.com/gsi/client?hl=en" async defer></script>`), but keeping the original tag right above it caused a conflict, and the button remained in Sinhala.
+    *   *Solution:* I deleted the duplicate script tag and ensured only the single, explicit language-forced script was loaded. This overrides Google's IP-based geolocation and guarantees the dashboard UI remains consistently in English regardless of the server or user's physical location.
+
+*   **CORS Cross-Origin Blocks During Frontend Development**
+    *   *Problem:* Because the Astro frontend runs on a separate port (`localhost:4321`) from the Falcon API (`localhost:8000`), the browser's Same-Origin Policy strictly blocked all fetch requests, preventing the dashboard from loading any metrics or authenticating.
+    *   *Solution:* Instead of insecurely opening the backend to all origins with a wildcard (`*`), I implemented a custom `CorsMiddleware` in Falcon. This middleware explicitly reads an `ALLOWED_ORIGIN` environment variable, ensuring the backend only accepts requests from the specific frontend URL during both local development and production.
+
+* **Astro Environment Variable Scope (Google OAuth 401 Error)**
+    *   *Problem:* When attempting to authenticate via the frontend, Google rejected the request with an "Access blocked: Authorisation error" (Error 401: invalid_client, as seen in "Screenshot 2026-08-14 000550.png"). This happened because the Astro frontend was sending a placeholder string to Google instead of my actual Client ID. I had placed the `.env` file in the root project directory, assuming it would be read globally.
+    *   *Solution:* I learned that Astro strictly reads `.env` files located exclusively inside its own project directory (`Frontend/frontend/`). I moved the configuration variables into a dedicated `.env` file within the Astro directory and restarted the development server. The correct Client ID (`224215348292-...`) was successfully injected, resolving the 401 error.
+
+*   **Securing the Web Terminal Against Shell Injection**
+    *   *Problem:* Passing raw string commands from the Astro frontend directly to the backend posed a severe security risk. If a user typed `ls && cat /etc/shadow`, a naive implementation could allow those shell operators to execute maliciously.
+    *   *Solution:* I utilized Python's `shlex.split()` to parse the incoming command string into a secure array of arguments before passing it to `pylxd`. This bypasses shell evaluation entirely; operators like `&&` or `|` are safely treated as literal strings by the container, completely neutralizing injection attacks.
+
+### What I Learned
+
+Through this task, I gained significant hands-on experience bridging high-level web frameworks with low-level system APIs. Specifically, I learned how to securely interact with Unix sockets via Python (`pylxd`), how to implement stateless JWT authorization via global middleware in Falcon, and how to aggressively optimize frontend resource consumption using Astro's Static Site Generation (SSG) combined with lightweight client-side libraries like uPlot. It reinforced the importance of enforcing security boundaries (like quotas and input sanitization) strictly on the server-side rather than relying on frontend UI constraints.
+
+### What I Learned
+Through this task, I gained hands-on experience with 
+                                                     1.securing Unix sockets from Python managing Astro SSG state, 
+                                                     2.bounding time-series data
+
 ## AI Tool Usage Log
 
-This project was developed with assistance from an AI coding assistant (Antigravity / Claude). The following work was AI-assisted:
+This project was developed with assistance from an AI coding assistant (Antigravity / Claude) , Gemini App. The following work was AI-assisted:
 
+- Reconfirming Project Structure
 - Initial skeleton generation for Falcon routes, auth middleware, and pylxd wrapper
 - Astro page scaffolding and CSS design system
 - SQLite schema design review
 - Documentation writing (README.md, REPORT.md)
 
 All code was reviewed, understood, and validated by the author before inclusion. The architecture decisions, security trade-offs, and design justifications in this document reflect the author's own analysis.
+
+
+## Bonus Features Implemented
+
+To ensure operational readiness and a professional engineering standard, I implemented the following features beyond the baseline requirements:
+
+1. **Automated CI/CD Pipeline (GitHub Actions):** I created a `.github/workflows/ci.yml` file. On every commit, this spins up an Ubuntu runner, verifies the Node 22 Astro SSG build, and checks the Python backend for syntax errors. This ensures broken code is never merged.
+2. **Production Deployment Files (systemd):** I included a `deployment/` directory containing `lxd-monitor-api.service` and `lxd-monitor-collector.service`. These allow a server admin to easily install the backend and collector as background daemons that automatically survive server reboots.
+3. **Documented Threat Model:** I included a comprehensive threat model (detailed above) that breaks down the attack vectors of the LXD socket, terminal shell injection, and TSDB memory exhaustion, along with their respective mitigations.
