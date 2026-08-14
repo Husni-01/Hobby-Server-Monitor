@@ -390,11 +390,11 @@ const { title } = Astro.props;
       </div>
 
       <div class="navbar-right" id="nav-user-area" style="display:none">
-        <div class="user-badge">
-          <span id="nav-email" style="color:var(--text-primary)"></span>
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <span id="nav-greeting" style="color:var(--text-primary); font-weight:500;"></span>
           <span id="nav-role-chip" class="role-chip"></span>
         </div>
-        <button class="btn-logout" id="btn-logout" onclick="window.doLogout()">Sign out</button>
+        <button class="btn-logout" id="btn-logout" onclick="window.doLogout()">Logout</button>
       </div>
     </nav>
 
@@ -406,16 +406,32 @@ const { title } = Astro.props;
       // Hydrate navbar from localStorage — runs on every page
       (function () {
         const raw = localStorage.getItem('user_data');
-        if (!raw) return;
+        if (!raw) {
+          if (window.location.pathname !== '/login') {
+            window.location.href = '/login';
+          }
+          return;
+        }
 
         let user;
-        try { user = JSON.parse(raw); } catch { return; }
+        try { 
+          user = JSON.parse(raw); 
+        } catch { 
+          if (window.location.pathname !== '/login') {
+            window.location.href = '/login';
+          }
+          return; 
+        }
 
         const area = document.getElementById('nav-user-area');
         if (area) area.style.display = 'flex';
 
-        const emailEl = document.getElementById('nav-email');
-        if (emailEl) emailEl.textContent = user.email;
+        const greetingEl = document.getElementById('nav-greeting');
+        if (greetingEl) {
+          // Extract username from email (e.g. "john" from "john@gmail.com")
+          const username = user.email ? user.email.split('@')[0] : 'User';
+          greetingEl.textContent = `Hi ${username}`;
+        }
 
         const chipEl = document.getElementById('nav-role-chip');
         if (chipEl) {
@@ -443,7 +459,7 @@ const { title } = Astro.props;
       window.doLogout = () => {
         localStorage.removeItem('session_token');
         localStorage.removeItem('user_data');
-        window.location.href = '/login';
+        window.location.href = '/login?logged_out=1';
       };
     </script>
   </body>

@@ -133,10 +133,7 @@ These are features that were understood but not implemented within scope:
 
 Through this task, I gained significant hands-on experience bridging high-level web frameworks with low-level system APIs. Specifically, I learned how to securely interact with Unix sockets via Python (`pylxd`), how to implement stateless JWT authorization via global middleware in Falcon, and how to aggressively optimize frontend resource consumption using Astro's Static Site Generation (SSG) combined with lightweight client-side libraries like uPlot. It reinforced the importance of enforcing security boundaries (like quotas and input sanitization) strictly on the server-side rather than relying on frontend UI constraints.
 
-### What I Learned
-Through this task, I gained hands-on experience with 
-                                                     1.securing Unix sockets from Python managing Astro SSG state, 
-                                                     2.bounding time-series data
+Through this task, I gained hands-on experience withsecuring Unix sockets from Python managing Astro SSG state, bounding time-series data
 
 ## AI Tool Usage Log
 

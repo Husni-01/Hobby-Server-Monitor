@@ -53,24 +53,28 @@ def get_or_create_user(email: str):
     cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
     user = cursor.fetchone()
 
+    # If user exists, return them
     if user:
         conn.close()
         return dict(user)
 
-    # First-time bootstrap: create admin account
-    if BOOTSTRAP_ADMIN_EMAIL and email == BOOTSTRAP_ADMIN_EMAIL:
-        cursor.execute(
-            "INSERT INTO users (email, role) VALUES (?, ?)",
-            (email, "admin")
-        )
-        conn.commit()
-        cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
-        user = dict(cursor.fetchone())
-        conn.close()
-        return user
+    # Check if there are ANY users in the database yet
+    cursor.execute("SELECT COUNT(*) FROM users")
+    user_count = cursor.fetchone()[0]
 
+    # For testing: ANY user who logs in is automatically created.
+    # The first user becomes admin, everyone else becomes a regular user.
+    role = "admin" if user_count == 0 else "user"
+    
+    cursor.execute(
+        "INSERT INTO users (email, role) VALUES (?, ?)",
+        (email, role)
+    )
+    conn.commit()
+    cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+    user = dict(cursor.fetchone())
     conn.close()
-    return None
+    return user
 
 
 def generate_jwt(user_dict: dict) -> str:

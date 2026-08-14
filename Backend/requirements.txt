@@ -4,3 +4,4 @@ google-auth>=2.29.0
 pylxd>=2.3.2
 tinyflux>=1.0.0
 gunicorn>=22.0.0
+python-dotenv>=1.0.0

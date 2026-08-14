@@ -1,337 +1,182 @@
 ---
-// src/pages/index.astro — Admin/User dashboard
-import Layout from '../layouts/Layout.astro';
+// src/pages/index.astro - Dashboard
 ---
-
-<Layout title="Dashboard">
-  <!-- Page header -->
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2rem; flex-wrap:wrap; gap:1rem;">
-    <div>
-      <h1 style="font-size:1.75rem; font-weight:700; letter-spacing:-0.02em;">Containers</h1>
-      <p class="text-secondary" style="margin-top:0.25rem; font-size:0.9rem;">Live status updates every 10 seconds</p>
-    </div>
-    <div style="display:flex; gap:0.75rem; align-items:center;">
-      <span id="last-updated" class="text-muted" style="font-size:0.8125rem;"></span>
-      <a href="/create" id="btn-create" class="btn btn-primary" style="display:none;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-        New Container
-      </a>
-    </div>
-  </div>
-
-  <!-- Container grid -->
-  <div id="container-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:1.25rem;">
-    <div class="card" style="animation:pulse-loading 1.5s ease infinite;">
-      <div style="height:1rem; background:var(--bg-elevated); border-radius:4px; width:40%; margin-bottom:1rem;"></div>
-      <div style="height:0.75rem; background:var(--bg-elevated); border-radius:4px; width:70%; margin-bottom:0.5rem;"></div>
-      <div style="height:0.75rem; background:var(--bg-elevated); border-radius:4px; width:55%;"></div>
-    </div>
-  </div>
-
-  <!-- Empty state -->
-  <div id="empty-state" style="display:none; text-align:center; padding:5rem 2rem;">
-    <div style="font-size:3rem; margin-bottom:1rem; opacity:0.3;">⬡</div>
-    <p style="color:var(--text-secondary); font-size:1rem;">No containers assigned to you.</p>
-    <p class="text-muted" style="font-size:0.875rem; margin-top:0.5rem;">Ask an administrator to grant you access.</p>
-  </div>
-
-  <!-- Error state -->
-  <div id="error-state" style="display:none;" class="alert alert-error" style="margin-top:2rem;"></div>
-
-  <!-- Delete confirmation modal -->
-  <div class="modal-overlay" id="delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
-    <div class="modal">
-      <h3 id="delete-modal-title" style="margin-bottom:0.75rem; font-size:1.1rem;">Delete Container?</h3>
-      <p class="text-secondary" style="font-size:0.9rem; margin-bottom:1.5rem;">
-        This will permanently destroy <strong id="delete-target-name" style="color:var(--red);"></strong> and all its data.
-        This action cannot be undone.
-      </p>
-      <div style="display:flex; gap:0.75rem; justify-content:flex-end;">
-        <button class="btn btn-ghost" onclick="closeDeleteModal()">Cancel</button>
-        <button class="btn btn-danger" id="confirm-delete-btn" onclick="confirmDelete()">Delete permanently</button>
-      </div>
-    </div>
-  </div>
-
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard | LXD Monitor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    @keyframes pulse-loading {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.5; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #0a0b0f;
+      color: #f0f2f8;
+      min-height: 100vh;
     }
 
-    .container-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 1.5rem;
-      transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+    /* ── Navbar ─────────────────────────────────────────── */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2rem;
+      height: 60px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: rgba(10,11,15,0.9);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: #f0f2f8;
+      text-decoration: none;
+    }
+
+    .brand-icon {
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+    }
+
+    .user-area {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    #greeting {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: #f0f2f8;
+    }
+
+    #role-badge {
+      padding: 0.2rem 0.55rem;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: rgba(99,102,241,0.2);
+      color: #a5b4fc;
+    }
+
+    #logout-btn {
+      background: transparent;
+      border: 1px solid rgba(239,68,68,0.4);
+      color: #f87171;
+      padding: 0.35rem 0.9rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.82rem;
+      font-family: inherit;
+      transition: all 0.15s ease;
+    }
+    #logout-btn:hover {
+      background: rgba(239,68,68,0.12);
+      border-color: #ef4444;
+      color: #ef4444;
+    }
+
+    /* ── Main content ──────────────────────────────────── */
+    main {
       display: flex;
       flex-direction: column;
-      gap: 1.25rem;
-      animation: card-appear 0.3s ease forwards;
-    }
-    @keyframes card-appear {
-      from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    .container-card:hover {
-      border-color: var(--border-hover);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
-    }
-
-    .metric-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.75rem;
-    }
-
-    .metric-item {
-      background: var(--bg-elevated);
-      border-radius: var(--radius-sm);
-      padding: 0.6rem 0.85rem;
-    }
-
-    .metric-label {
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-muted);
-      margin-bottom: 0.2rem;
-    }
-
-    .metric-value {
-      font-size: 0.9rem;
-      font-weight: 600;
-      color: var(--text-primary);
-      font-family: var(--font-mono);
-    }
-
-    .action-bar {
-      display: flex;
-      gap: 0.4rem;
-      flex-wrap: wrap;
-      padding-top: 0.75rem;
-      border-top: 1px solid var(--border);
-    }
-
-    .view-link {
-      margin-left: auto;
-      display: inline-flex;
       align-items: center;
-      gap: 0.3rem;
-      font-size: 0.8125rem;
-      color: var(--accent);
-      text-decoration: none;
-      padding: 0.3rem 0.5rem;
-      border-radius: var(--radius-sm);
-      transition: all 0.18s ease;
+      justify-content: center;
+      height: calc(100vh - 60px);
+      text-align: center;
+      padding: 2rem;
     }
-    .view-link:hover { background: rgba(99,102,241,0.1); }
+
+    .hex {
+      font-size: 5rem;
+      opacity: 0.4;
+      margin-bottom: 1.5rem;
+      animation: float 4s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%,100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #f0f2f8, #a5b4fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.75rem;
+    }
+
+    .welcome-msg {
+      color: #8b95b0;
+      font-size: 1.05rem;
+      max-width: 440px;
+      line-height: 1.6;
+    }
   </style>
+</head>
+<body>
+  <nav>
+    <a href="/" class="brand">
+      <span class="brand-icon">⬡</span>
+      LXD Monitor
+    </a>
+    <div class="user-area">
+      <span id="greeting">Loading...</span>
+      <span id="role-badge"></span>
+      <button id="logout-btn">Logout</button>
+    </div>
+  </nav>
+
+  <main>
+    <div class="hex">⬡</div>
+    <h1>Welcome!</h1>
+    <p class="welcome-msg" id="welcome-msg">You are signed in.</p>
+  </main>
 
   <script>
-    import { api } from '../lib/api.js';
+    // Guard: if no session, redirect to login immediately
+    const userData = localStorage.getItem('user_data');
+    const token    = localStorage.getItem('session_token');
 
-    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-    const isAdmin  = userData.role === 'admin';
+    if (!userData || !token) {
+      location.href = '/login';
+    } else {
+      try {
+        const user = JSON.parse(userData);
+        const username = user.email ? user.email.split('@')[0] : 'User';
 
-    if (isAdmin) {
-      document.getElementById('btn-create').style.display = 'flex';
-    }
-
-    // ── Helpers ──────────────────────────────────────────────────────────────
-    function fmtBytes(bytes, decimals = 1) {
-      if (!bytes || bytes === 0) return '0 B';
-      const k = 1024, sizes = ['B','KB','MB','GB','TB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return `${parseFloat((bytes / Math.pow(k, i)).toFixed(decimals))} ${sizes[i]}`;
-    }
-
-    function statusBadge(status) {
-      const map = {
-        Running: 'badge-running', Stopped: 'badge-stopped',
-        Frozen: 'badge-frozen', Error: 'badge-error',
-      };
-      return `<span class="badge ${map[status] || 'badge-error'}">${status}</span>`;
-    }
-
-    function memBar(used, total, limitRaw) {
-      if (!total || total === 0) return '';
-      const pct = Math.min(100, Math.round((used / total) * 100));
-      const color = pct > 85 ? 'var(--red)' : pct > 65 ? 'var(--amber)' : 'var(--green)';
-      return `
-        <div class="stat-bar" style="margin-top:0.3rem;">
-          <div class="stat-bar-fill" style="width:${pct}%; background:${color};"></div>
-        </div>
-        <span style="font-size:0.7rem; color:var(--text-muted); margin-top:0.15rem; display:block;">${pct}% of ${limitRaw || fmtBytes(total)}</span>
-      `;
-    }
-
-    function adminActions(name, status) {
-      if (!isAdmin) return '';
-      const isPaused  = status === 'Frozen';
-      const isRunning = status === 'Running';
-      const isStopped = status === 'Stopped';
-
-      return `
-        <div class="action-bar" id="action-bar-${name}">
-          ${isStopped  ? `<button class="btn btn-success btn-sm" onclick="doAction('${name}','start')">▶ Start</button>` : ''}
-          ${isRunning  ? `<button class="btn btn-ghost btn-sm"   onclick="doAction('${name}','stop')">■ Stop</button>` : ''}
-          ${isRunning  ? `<button class="btn btn-ghost btn-sm"   onclick="doAction('${name}','restart')">↺ Restart</button>` : ''}
-          ${isRunning  ? `<button class="btn btn-amber btn-sm"   onclick="doAction('${name}','freeze')">❄ Freeze</button>` : ''}
-          ${isPaused   ? `<button class="btn btn-success btn-sm" onclick="doAction('${name}','unfreeze')">▶ Unfreeze</button>` : ''}
-          <a href="/container/${name}" class="view-link">Details →</a>
-          <button class="btn btn-danger btn-sm" style="margin-left:0;" onclick="openDeleteModal('${name}')">✕ Delete</button>
-        </div>
-      `;
-    }
-
-    function renderCard(c) {
-      const memPct   = c.mem_total > 0 ? Math.round((c.mem_used / c.mem_total) * 100) : 0;
-      const memColor = memPct > 85 ? 'var(--red)' : memPct > 65 ? 'var(--amber)' : 'var(--green)';
-
-      return `
-        <div class="container-card" id="card-${c.name}">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.75rem;">
-            <div>
-              <h2 style="font-size:1rem; font-weight:600; margin-bottom:0.3rem; font-family:var(--font-mono);">${c.name}</h2>
-              <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                ${statusBadge(c.status)}
-                ${c.ipv4 && c.ipv4 !== 'N/A' ? `<span class="badge" style="background:rgba(59,130,246,0.1); color:var(--blue);">${c.ipv4}</span>` : ''}
-              </div>
-            </div>
-            <a href="/container/${c.name}" class="view-link" style="flex-shrink:0;">
-              Details →
-            </a>
-          </div>
-
-          <!-- Metrics grid -->
-          <div class="metric-row">
-            <div class="metric-item">
-              <div class="metric-label">RAM Used</div>
-              <div class="metric-value">${fmtBytes(c.mem_used)}</div>
-              ${c.mem_total > 0 ? `
-                <div class="stat-bar" style="margin-top:0.3rem;">
-                  <div class="stat-bar-fill" style="width:${memPct}%; background:${memColor};"></div>
-                </div>
-                <span style="font-size:0.7rem;color:var(--text-muted);margin-top:0.15rem;display:block;">${memPct}% of ${c.mem_limit_raw || fmtBytes(c.mem_total)}</span>
-              ` : ''}
-            </div>
-
-            <div class="metric-item">
-              <div class="metric-label">Disk Used</div>
-              <div class="metric-value">${fmtBytes(c.disk_used)}</div>
-            </div>
-
-            <div class="metric-item">
-              <div class="metric-label">Network RX / TX</div>
-              <div class="metric-value" style="font-size:0.78rem;">${fmtBytes(c.net_rx)} / ${fmtBytes(c.net_tx)}</div>
-            </div>
-
-            <div class="metric-item">
-              <div class="metric-label">Processes</div>
-              <div class="metric-value">${c.processes ?? '—'}</div>
-            </div>
-          </div>
-
-          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-            <span style="font-size:0.75rem; color:var(--text-muted);">
-              CPU: <span style="color:var(--text-secondary);">${c.cpu_limit || '—'}</span>
-            </span>
-            ${c.architecture ? `<span style="font-size:0.75rem; color:var(--text-muted);">
-              Arch: <span style="color:var(--text-secondary);">${c.architecture}</span>
-            </span>` : ''}
-          </div>
-
-          ${isAdmin ? adminActions(c.name, c.status) : `
-            <div style="padding-top:0.75rem; border-top:1px solid var(--border);">
-              <a href="/container/${c.name}" class="view-link" style="margin-left:0;">View Metrics & Terminal →</a>
-            </div>
-          `}
-        </div>
-      `;
-    }
-
-    // ── Load & Render ─────────────────────────────────────────────────────────
-    async function loadContainers() {
-      const res = await api.get('/containers');
-      if (!res) return;
-
-      document.getElementById('last-updated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
-
-      if (!res.ok) {
-        document.getElementById('error-state').style.display = 'block';
-        document.getElementById('error-state').textContent   = 'Failed to load containers.';
-        return;
+        document.getElementById('greeting').textContent = `Hi, ${username}`;
+        document.getElementById('role-badge').textContent = user.role || 'user';
+        document.getElementById('welcome-msg').textContent =
+          `Signed in as ${user.email}. Use the logout button to sign out.`;
+      } catch {
+        location.href = '/login';
       }
-
-      const containers = await res.json();
-      const grid       = document.getElementById('container-grid');
-      const empty      = document.getElementById('empty-state');
-
-      if (containers.length === 0) {
-        grid.style.display  = 'none';
-        empty.style.display = 'block';
-        return;
-      }
-
-      grid.style.display  = 'grid';
-      empty.style.display = 'none';
-      grid.innerHTML      = containers.map(renderCard).join('');
     }
 
-    // ── Lifecycle actions ─────────────────────────────────────────────────────
-    window.doAction = async (name, action) => {
-      const bar = document.getElementById(`action-bar-${name}`);
-      if (bar) bar.style.opacity = '0.4';
-
-      const res = await api.post(`/containers/${name}/action`, { action });
-      if (res && res.ok) {
-        await loadContainers();
-      } else if (res) {
-        const d = await res.json();
-        alert(`Action failed: ${d.description || 'Unknown error'}`);
-        if (bar) bar.style.opacity = '1';
-      }
-    };
-
-    // ── Delete modal ──────────────────────────────────────────────────────────
-    let _deleteTarget = null;
-    window.openDeleteModal = (name) => {
-      _deleteTarget = name;
-      document.getElementById('delete-target-name').textContent = name;
-      document.getElementById('delete-modal').classList.add('open');
-    };
-    window.closeDeleteModal = () => {
-      _deleteTarget = null;
-      document.getElementById('delete-modal').classList.remove('open');
-    };
-    window.confirmDelete = async () => {
-      if (!_deleteTarget) return;
-      const btn = document.getElementById('confirm-delete-btn');
-      btn.disabled    = true;
-      btn.textContent = 'Deleting…';
-
-      const res = await api.post(`/containers/${_deleteTarget}/action`, { action: 'delete' });
-      closeDeleteModal();
-      btn.disabled    = false;
-      btn.textContent = 'Delete permanently';
-
-      if (res && res.ok) {
-        await loadContainers();
-      } else if (res) {
-        const d = await res.json();
-        alert(`Delete failed: ${d.description || 'Unknown error'}`);
-      }
-    };
-
-    // Close modal on backdrop click
-    document.getElementById('delete-modal').addEventListener('click', (e) => {
-      if (e.target === e.currentTarget) closeDeleteModal();
+    // Attach event listener to logout button
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      localStorage.removeItem('session_token');
+      localStorage.removeItem('user_data');
+      location.href = '/login?logged_out=1';
     });
-
-    loadContainers();
-    setInterval(loadContainers, 10000);
   </script>
-</Layout>
+</body>
+</html>

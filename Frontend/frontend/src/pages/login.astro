@@ -1,208 +1,125 @@
 ---
-// src/pages/login.astro
-const GOOGLE_CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? 'YOUR_GOOGLE_CLIENT_ID';
+// src/pages/login.astro - Clean rewrite
 ---
-
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Sign in to LXD Monitor — Self-hosted container management dashboard" />
   <title>Sign In | LXD Monitor</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-  <script src="https://accounts.google.com/gsi/client?hl=en" async defer></script>
-
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
-    :root {
-      --accent:      #6366f1;
-      --accent-glow: rgba(99,102,241,0.35);
-      --purple:      #a855f7;
-    }
-
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'Inter', sans-serif;
       background: #0a0b0f;
       color: #f0f2f8;
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
-      -webkit-font-smoothing: antialiased;
     }
 
-    /* Animated mesh gradient background */
-    .bg-gradient {
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      background:
-        radial-gradient(ellipse 80% 80% at 10% 10%,  rgba(99,102,241,0.15) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 60% at 90% 90%,  rgba(168,85,247,0.12) 0%, transparent 60%),
-        radial-gradient(ellipse 100% 60% at 50% 100%,rgba(59,130,246,0.08) 0%, transparent 50%),
-        #0a0b0f;
-    }
-
-    /* Floating orbs */
-    .orb {
-      position: fixed;
-      border-radius: 50%;
-      filter: blur(80px);
-      opacity: 0.15;
-      z-index: 0;
-      animation: float 12s ease-in-out infinite;
-    }
-    .orb-1 { width: 400px; height: 400px; background: var(--accent); top: -10%;  left: -10%; animation-delay: 0s; }
-    .orb-2 { width: 300px; height: 300px; background: var(--purple); bottom: -5%; right: -5%; animation-delay: -6s; }
-
-    @keyframes float {
-      0%, 100% { transform: translate(0, 0) scale(1); }
-      50%       { transform: translate(20px, -20px) scale(1.05); }
-    }
-
-    .login-wrapper {
-      position: relative;
-      z-index: 1;
-      width: 100%;
-      max-width: 420px;
-      padding: 1rem;
-    }
-
-    .login-card {
-      background: rgba(17,19,24,0.85);
-      backdrop-filter: blur(32px) saturate(150%);
-      -webkit-backdrop-filter: blur(32px) saturate(150%);
-      border: 1px solid rgba(255,255,255,0.09);
+    .card {
+      background: rgba(17,19,24,0.9);
+      border: 1px solid rgba(255,255,255,0.1);
       border-radius: 20px;
       padding: 3rem 2.5rem;
-      box-shadow:
-        0 0 0 1px rgba(255,255,255,0.04),
-        0 20px 60px rgba(0,0,0,0.6),
-        0 0 80px var(--accent-glow);
-      animation: card-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 80px rgba(99,102,241,0.2);
+      text-align: center;
     }
 
-    @keyframes card-in {
-      from { opacity: 0; transform: translateY(20px) scale(0.97); }
-      to   { opacity: 1; transform: translateY(0)    scale(1);    }
-    }
-
-    .login-logo {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 2rem;
-    }
-
-    .logo-icon {
-      width: 52px;
-      height: 52px;
-      background: linear-gradient(135deg, var(--accent), var(--purple));
+    .logo {
+      width: 56px; height: 56px;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
       border-radius: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 26px;
-      box-shadow: 0 0 30px var(--accent-glow), 0 4px 20px rgba(0,0,0,0.4);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px;
+      margin: 0 auto 1.5rem;
+      box-shadow: 0 0 30px rgba(99,102,241,0.4);
     }
 
     h1 {
-      font-size: 1.625rem;
+      font-size: 1.6rem;
       font-weight: 700;
-      text-align: center;
-      margin-bottom: 0.5rem;
       background: linear-gradient(135deg, #f0f2f8, #a5b4fc);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
-      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
     }
 
     .subtitle {
-      text-align: center;
       color: #8b95b0;
       font-size: 0.9rem;
       margin-bottom: 2.5rem;
     }
 
     .divider {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      margin-bottom: 2rem;
       color: #505670;
-      font-size: 0.8125rem;
+      font-size: 0.8rem;
+      margin-bottom: 1.5rem;
+      display: flex; align-items: center; gap: 1rem;
     }
     .divider::before, .divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
+      content: ''; flex: 1; height: 1px;
       background: rgba(255,255,255,0.07);
     }
 
-    /* Override Google button to center it */
-    .g_id_signin {
-      display: flex !important;
-      justify-content: center !important;
-    }
+    /* Center the Google button */
+    .g_id_signin { display: flex !important; justify-content: center !important; }
 
-    .error-box {
+    .msg {
+      display: none;
+      margin-top: 1.5rem;
+      padding: 0.9rem 1.2rem;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 500;
+    }
+    .msg.success {
+      background: rgba(34,197,94,0.15);
+      border: 1px solid rgba(34,197,94,0.4);
+      color: #4ade80;
+    }
+    .msg.error {
       background: rgba(239,68,68,0.1);
       border: 1px solid rgba(239,68,68,0.3);
-      border-left: 3px solid #ef4444;
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-      font-size: 0.875rem;
       color: #f87171;
-      margin-top: 1.5rem;
-      display: none;
-      animation: shake 0.3s ease;
     }
-    @keyframes shake {
-      0%, 100% { transform: translateX(0); }
-      25%  { transform: translateX(-5px); }
-      75%  { transform: translateX(5px); }
+    .msg.info {
+      background: rgba(59,130,246,0.1);
+      border: 1px solid rgba(59,130,246,0.3);
+      color: #60a5fa;
     }
 
-    .footer-note {
-      text-align: center;
+    .footer {
       margin-top: 2rem;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       color: #505670;
-      line-height: 1.5;
     }
   </style>
 </head>
 <body>
-  <div class="bg-gradient"></div>
-  <div class="orb orb-1"></div>
-  <div class="orb orb-2"></div>
-
-  <div class="login-wrapper">
-    <div class="login-card">
-      <div class="login-logo">
-        <div class="logo-icon" aria-hidden="true">⬡</div>
-      </div>
-
+  <div class="card" id="card">
+    <!-- Login Form -->
+    <div id="login-form">
+      <div class="logo">⬡</div>
       <h1>LXD Monitor</h1>
       <p class="subtitle">Sign in to manage your containers</p>
 
       <div class="divider">Continue with Google</div>
 
-      <!-- Google Identity Services -->
       <div
         id="g_id_onload"
-        data-client_id={GOOGLE_CLIENT_ID}
-        data-context="signin"
-        data-ux_mode="popup"
-        data-callback="handleCredentialResponse"
+        data-client_id="224215348292-12hbkj68ngp1grg9rcnp3l1i4o5ilmsf.apps.googleusercontent.com"
+        data-callback="onGoogleSignIn"
         data-auto_prompt="false"
-        data-locale="en"
+        data-ux_mode="popup"
       ></div>
 
       <div
@@ -213,32 +130,53 @@ const GOOGLE_CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? 'YOUR_GOOGLE
         data-text="signin_with"
         data-size="large"
         data-logo_alignment="left"
-        data-width="340"
+        data-width="300"
       ></div>
 
-      <div id="error-box" class="error-box" role="alert"></div>
-
-      <p class="footer-note">
-        Access is by invitation only.<br />
-        Contact your administrator if you need access.
-      </p>
+      <p class="footer">Access is by invitation only.</p>
     </div>
+
+    <!-- Messages (outside login-form so they persist when form is hidden) -->
+    <div id="msg-success" class="msg success">✓ Successfully Signed In! Redirecting...</div>
+    <div id="msg-error"   class="msg error"></div>
+    <div id="msg-logout"  class="msg info">You have been logged out.</div>
   </div>
 
   <script>
-    // Redirect already-logged-in users
-    if (localStorage.getItem('session_token')) {
-      window.location.href = '/';
+    const API = 'http://localhost:8000/api';
+
+    // Show logout message
+    if (location.search.includes('logged_out=1')) {
+      document.getElementById('msg-logout').style.display = 'block';
+      history.replaceState({}, '', '/login');
     }
 
-    const API_BASE = 'http://localhost:8000/api';
+    // If already logged in with valid token, go to dashboard
+    const existingToken = localStorage.getItem('session_token');
+    if (existingToken) {
+      // Validate the token is not expired before redirecting
+      try {
+        const payload = JSON.parse(atob(existingToken.split('.')[1]));
+        if (payload.exp * 1000 > Date.now()) {
+          location.href = '/';
+        } else {
+          // Token expired - clear it
+          localStorage.removeItem('session_token');
+          localStorage.removeItem('user_data');
+        }
+      } catch {
+        localStorage.removeItem('session_token');
+        localStorage.removeItem('user_data');
+      }
+    }
 
-    window.handleCredentialResponse = async (response) => {
-      const errorBox = document.getElementById('error-box');
-      errorBox.style.display = 'none';
+    window.onGoogleSignIn = async (response) => {
+      const errEl = document.getElementById('msg-error');
+      const sucEl = document.getElementById('msg-success');
+      errEl.style.display = 'none';
 
       try {
-        const res = await fetch(`${API_BASE}/auth/login`, {
+        const res = await fetch(`${API}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ google_token: response.credential }),
@@ -248,16 +186,21 @@ const GOOGLE_CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? 'YOUR_GOOGLE
 
         if (res.ok) {
           localStorage.setItem('session_token', data.token);
-          localStorage.setItem('user_data',     JSON.stringify(data.user));
-          window.location.href = '/';
+          localStorage.setItem('user_data', JSON.stringify(data.user));
+
+          // Hide the login form, show success
+          document.getElementById('login-form').style.display = 'none';
+          sucEl.style.display = 'block';
+
+          // Redirect after 1.5s
+          setTimeout(() => { location.href = '/'; }, 1500);
         } else {
-          errorBox.textContent  = data.description || 'Access denied. You must be invited by an administrator.';
-          errorBox.style.display = 'block';
+          errEl.textContent = data.description || 'Access denied.';
+          errEl.style.display = 'block';
         }
-      } catch (err) {
-        console.error('Login error:', err);
-        errorBox.textContent  = 'Network error — could not reach the server.';
-        errorBox.style.display = 'block';
+      } catch (e) {
+        errEl.textContent = 'Cannot reach server. Is the backend running?';
+        errEl.style.display = 'block';
       }
     };
   </script>
